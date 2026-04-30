@@ -23,7 +23,7 @@ import {
   getSupportTicketStatuses,
   getSupportTickets,
   getTenantJoinableProperties,
-  getUsers,
+  getUsersPersisted,
   getVendorPerformanceMetrics,
   getVendorProfiles,
   isDemoDataEnabled,
@@ -225,7 +225,8 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   const vendorVerificationFilter = params.vendorVerification ?? "all";
   const feedbackStatusFilter = params.feedbackStatus ?? "all";
   const includeDemoData = isDemoDataEnabled();
-  const users = includeDemoData ? getUsers() : getUsers().filter((user) => !isDemoUser(user));
+  const persistedUsers = await getUsersPersisted();
+  const users = includeDemoData ? persistedUsers : persistedUsers.filter((user) => !isDemoUser(user));
   const visibleUserIds = new Set(users.map((user) => user.id));
   const properties = (includeDemoData ? getTenantJoinableProperties() : getTenantJoinableProperties().filter((property) => !isDemoProperty(property)))
     .filter((property) => visibleUserIds.has(property.landlordId));

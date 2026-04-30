@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import {
   createUserPersisted,
   findUserByEmail,
-  findUserById,
+  findUserByEmailPersisted,
+  findUserByIdPersisted,
   hydratePersistentStore,
-  validateUserLogin,
+  validateUserLoginPersisted,
 } from "@/lib/demo-data";
 import {
   getDashboardPath,
@@ -136,7 +137,7 @@ export async function loginAction(formData: FormData) {
   const user =
     adminUser?.role === "admin" && adminUser.password === password
       ? adminUser
-      : validateUserLogin(email, password, role);
+      : await validateUserLoginPersisted(email, password, role);
   console.log("login user lookup result", {
     email,
     requestedRole: role,
@@ -164,7 +165,7 @@ export async function signupAction(formData: FormData) {
   console.log(`${role} signup submitted`);
   const name = String(formData.get("name") ?? "").trim();
 
-  if (findUserByEmail(email)) {
+  if (await findUserByEmailPersisted(email)) {
     redirect(`/signup?error=email-taken&role=${role}`);
   }
 
@@ -217,7 +218,7 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 
   if (parsed.userId) {
-    const user = findUserById(parsed.userId);
+    const user = await findUserByIdPersisted(parsed.userId);
 
     if (user) {
       return {

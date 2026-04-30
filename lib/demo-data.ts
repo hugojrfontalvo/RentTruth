@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
 import { after } from "next/server";
 import { dirname, join } from "path";
@@ -431,6 +432,11 @@ type CreateUserInput = {
   linkedToLandlord?: boolean;
   accountLinkageSignals?: AccountLinkageSignal[];
   createdAt?: string;
+};
+
+type CreateUserOptions = {
+  id?: string;
+  persist?: boolean;
 };
 
 type DemoStore = {
@@ -1458,6 +1464,150 @@ async function ensureDatabaseStoreTable(pool: Pool) {
   `);
 }
 
+async function ensureDatabaseUsersTable(pool: Pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS renttruth_users (
+      id text PRIMARY KEY,
+      email text NOT NULL UNIQUE,
+      password text NOT NULL,
+      role text NOT NULL,
+      name text,
+      data jsonb NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+function normalizeDatabaseUser(input: unknown) {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const user = cloneUser(input as AppUser);
+
+  if (!user.id || !user.email || !user.password || !user.role) {
+    return null;
+  }
+
+  user.email = normalizeEmail(user.email);
+  return user;
+}
+
+async function readDatabaseUsers() {
+  const pool = getDatabasePool();
+
+  if (!pool) {
+    return [];
+  }
+
+  await ensureDatabaseUsersTable(pool);
+  const result = await pool.query<{ data: AppUser }>(
+    "SELECT data FROM renttruth_users ORDER BY created_at ASC, id ASC",
+  );
+
+  return result.rows
+    .map((row) => normalizeDatabaseUser(row.data))
+    .filter((user): user is AppUser => Boolean(user));
+}
+
+async function readDatabaseUserByEmail(email: string) {
+  const pool = getDatabasePool();
+
+  if (!pool) {
+    return null;
+  }
+
+  await ensureDatabaseUsersTable(pool);
+  const result = await pool.query<{ data: AppUser }>(
+    "SELECT data FROM renttruth_users WHERE email = $1 LIMIT 1",
+    [normalizeEmail(email)],
+  );
+
+  return normalizeDatabaseUser(result.rows[0]?.data);
+}
+
+async function readDatabaseUserById(userId: string) {
+  const pool = getDatabasePool();
+
+  if (!pool) {
+    return null;
+  }
+
+  await ensureDatabaseUsersTable(pool);
+  const result = await pool.query<{ data: AppUser }>(
+    "SELECT data FROM renttruth_users WHERE id = $1 LIMIT 1",
+    [userId],
+  );
+
+  return normalizeDatabaseUser(result.rows[0]?.data);
+}
+
+async function writeDatabaseUser(user: AppUser) {
+  const pool = getDatabasePool();
+
+  if (!pool) {
+    throw new Error("DATABASE_URL is required to save production users.");
+  }
+
+  await ensureDatabaseUsersTable(pool);
+  const result = await pool.query(
+    `
+      INSERT INTO renttruth_users (id, email, password, role, name, data, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, COALESCE($7::timestamptz, now()), now())
+      ON CONFLICT (email)
+      DO NOTHING
+    `,
+    [
+      user.id,
+      normalizeEmail(user.email),
+      user.password,
+      user.role,
+      user.name ?? null,
+      JSON.stringify(user),
+      user.createdAt ?? null,
+    ],
+  );
+
+  if (result.rowCount !== 1) {
+    throw new Error(`User with email ${user.email} already exists.`);
+  }
+}
+
+async function migrateDatabaseStoreUsersToUserTableIfNeeded(databaseUsers: AppUser[]) {
+  if (databaseUsers.length > 0) {
+    return databaseUsers;
+  }
+
+  const usersToMigrate = store.users.filter((user) => user.role !== "admin" && !isDemoUser(user));
+
+  for (const user of usersToMigrate) {
+    await writeDatabaseUser(user);
+  }
+
+  return readDatabaseUsers();
+}
+
+function applyDatabaseUsers(databaseUsers: AppUser[]) {
+  const nextUsers = [...adminBootstrapUsers.map(cloneUser)];
+
+  for (const databaseUser of databaseUsers) {
+    const normalizedEmail = normalizeEmail(databaseUser.email);
+    const existingIndex = nextUsers.findIndex(
+      (user) => user.id === databaseUser.id || normalizeEmail(user.email) === normalizedEmail,
+    );
+
+    if (existingIndex >= 0) {
+      nextUsers[existingIndex] = cloneUser(databaseUser);
+    } else {
+      nextUsers.push(cloneUser(databaseUser));
+    }
+  }
+
+  replaceArray(store.users, nextUsers);
+  normalizeCounters(store);
+}
+
 async function readDatabaseStore() {
   const pool = getDatabasePool();
 
@@ -1617,6 +1767,8 @@ export async function hydratePersistentStore() {
         applyStoreSnapshot(initialStore);
         await writeDatabaseStoreSnapshot(cloneStoreSnapshot(store));
       }
+      const databaseUsers = await migrateDatabaseStoreUsersToUserTableIfNeeded(await readDatabaseUsers());
+      applyDatabaseUsers(databaseUsers);
     } catch (error) {
       console.error(
         "RentTruth database store could not be read. Check DATABASE_URL and database permissions.",
@@ -2286,6 +2438,43 @@ export function getUsers() {
   return users.slice().sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
 }
 
+export async function findUserByIdPersisted(userId: string) {
+  if (isDatabasePersistenceEnabled()) {
+    const user = await readDatabaseUserById(userId);
+
+    if (user) {
+      return user;
+    }
+  }
+
+  await hydratePersistentStore();
+  return findUserById(userId);
+}
+
+export async function findUserByEmailPersisted(email: string) {
+  if (isDatabasePersistenceEnabled()) {
+    const user = await readDatabaseUserByEmail(email);
+
+    if (user) {
+      return user;
+    }
+  }
+
+  await hydratePersistentStore();
+  return findUserByEmail(email);
+}
+
+export async function getUsersPersisted() {
+  if (isDatabasePersistenceEnabled()) {
+    const databaseUsers = await readDatabaseUsers();
+    applyDatabaseUsers(databaseUsers);
+  } else {
+    await hydratePersistentStore();
+  }
+
+  return getUsers();
+}
+
 export function upsertVendorProfile(input: VendorProfile) {
   const existing = findVendorProfileByUserId(input.userId);
 
@@ -2368,11 +2557,21 @@ export function validateUserLogin(email: string, password: string, role: AppRole
   return user;
 }
 
-export function createUser(input: CreateUserInput, options: { persist?: boolean } = {}) {
+export async function validateUserLoginPersisted(email: string, password: string, role: AppRole) {
+  const user = await findUserByEmailPersisted(email);
+
+  if (!user || user.password !== password || user.role !== role) {
+    return null;
+  }
+
+  return user;
+}
+
+export function createUser(input: CreateUserInput, options: CreateUserOptions = {}) {
   const shouldPersist = options.persist ?? true;
   const normalizedEmail = normalizeEmail(input.email);
   const user: AppUser = {
-    id: `user-${store.userCounter}`,
+    id: options.id ?? `user-${store.userCounter}`,
     email: normalizedEmail,
     password: input.password,
     role: input.role,
@@ -2415,8 +2614,17 @@ export async function createUserPersisted(input: CreateUserInput) {
   const previousStore = cloneStoreSnapshot(store);
 
   try {
-    const user = createUser(input, { persist: false });
-    await persistStoreNow();
+    const user = createUser(input, {
+      id: isDatabasePersistenceEnabled() ? `user-${randomUUID()}` : undefined,
+      persist: false,
+    });
+
+    if (isDatabasePersistenceEnabled()) {
+      await writeDatabaseUser(user);
+    } else {
+      await persistStoreNow();
+    }
+
     return user;
   } catch (error) {
     applyStoreSnapshot(previousStore);
