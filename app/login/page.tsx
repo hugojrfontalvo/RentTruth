@@ -6,6 +6,8 @@ import { getSession, loginAction } from "@/app/actions/auth";
 import {
   getDashboardPath,
   isAppRole,
+  roleAccentClasses,
+  roleDescriptions,
   roleLabels,
   userRoles,
   type AppRole,
@@ -29,6 +31,14 @@ function LoginForm({
       : error === "missing-fields"
         ? "Enter an email, password, and role to continue."
         : null;
+
+  function getRoleCardClass(role: UserRole) {
+    if (selectedRole === role) {
+      return "border-ink bg-ink text-white shadow-lg shadow-slate-200/70 ring-2 ring-ink";
+    }
+
+    return `border-slate-200 bg-gradient-to-b ${roleAccentClasses[role]} text-slate-800 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg hover:shadow-slate-200/70`;
+  }
 
   return (
     <>
@@ -59,15 +69,23 @@ function LoginForm({
           <Link
             key={role}
             href={`/login?role=${role}`}
-            className={`rounded-[24px] border p-4 text-left transition ${
-              selectedRole === role
-                ? "border-ink bg-ink text-white shadow-lg shadow-slate-200/70"
-                : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white"
-            }`}
+            className={`min-w-0 rounded-[24px] border p-4 text-left transition ${getRoleCardClass(role)}`}
           >
-            <p className="font-display text-lg font-semibold">{roleLabels[role]}</p>
-            <p className={`mt-2 text-sm ${selectedRole === role ? "text-white/70" : "text-slate-500"}`}>
-              Continue as {roleLabels[role].toLowerCase()}.
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-display text-lg font-semibold">{roleLabels[role]}</p>
+                <p className={`mt-2 text-sm leading-5 ${selectedRole === role ? "text-white/70" : "text-slate-600"}`}>
+                  {roleDescriptions[role]}
+                </p>
+              </div>
+              <span
+                className={`mt-1 h-4 w-4 shrink-0 rounded-full border ${
+                  selectedRole === role ? "border-white bg-white" : "border-slate-300 bg-white/80"
+                }`}
+              />
+            </div>
+            <p className={`mt-3 text-xs font-semibold uppercase tracking-[0.14em] ${selectedRole === role ? "text-white/60" : "text-slate-500"}`}>
+              Continue as {roleLabels[role].toLowerCase()}
             </p>
           </Link>
         ))}
@@ -136,10 +154,36 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       sideTitle="Everything in one place"
       sideDescription="Move from intake to resolution with shared visibility, role-aware workflows, and trust metrics built into every handoff."
       sideStats={[
-        { value: "3", label: "user types supported" },
-        { value: "1", label: "shared repair timeline" },
-        { value: "24/7", label: "access to your dashboard" },
+        { value: "3", label: "workspaces" },
+        { value: "1", label: "repair timeline" },
+        { value: "Live", label: "status visibility" },
       ]}
+      sideHighlights={[
+        {
+          title: "Tenants see what happens next",
+          description: "Join a property, submit repair tickets, and confirm whether the work actually fixed the issue.",
+        },
+        {
+          title: "Landlords get an operations view",
+          description: "Approve residents, manage open tickets, compare vendors, and keep access codes easy to find.",
+        },
+        {
+          title: "Vendors focus on local jobs",
+          description: "Review eligible work, request assignment, and track arrival and completion milestones.",
+        },
+      ]}
+      sideExample={{
+        eyebrow: "Login snapshot",
+        title: "One account, role-specific dashboard",
+        items: [
+          { value: "Tickets", label: "repair workflow" },
+          { value: "Codes", label: "property access" },
+          { value: "Vendors", label: "assignment flow" },
+          { value: "Admin", label: "platform visibility" },
+        ],
+        note: "Admin login still works from this same form when the configured admin email is used.",
+      }}
+      sideCaption="The login experience mirrors the live marketplace: renters, landlords, vendors, and admin each land in the workspace built for their role."
       footerText="Need an account?"
       footerLinkLabel="Create one"
       footerLinkHref="/signup"
