@@ -9,13 +9,12 @@ import {
 import { getSession, logoutAction } from "@/app/actions/auth";
 import { isAdminSession } from "@/lib/admin-access";
 import {
+  type AppUser,
+  type Property,
   type RepairTicket,
   type SupportTicket,
   type VendorProfile,
-  findPropertyById,
-  findUserById,
   getActivityEvents,
-  getApprovedTenantsForProperty,
   getNotifications,
   getPropertyDisplayName,
   getPropertyFullAddress,
@@ -27,6 +26,12 @@ import {
   getUsers,
   getVendorPerformanceMetrics,
   getVendorProfiles,
+  isDemoDataEnabled,
+  isDemoProperty,
+  isDemoRepairTicket,
+  isDemoSupportTicket,
+  isDemoUser,
+  isDemoVendorProfile,
   propertyTypeRequiresUnit,
 } from "@/lib/demo-data";
 
@@ -163,9 +168,17 @@ function averageCompletionLabel(properties: Array<{ averageCompletionTime: strin
   return properties[0]?.averageCompletionTime ?? "Not enough data";
 }
 
-function getTicketLandlord(ticket: RepairTicket) {
-  const property = findPropertyById(ticket.propertyId);
-  return property ? findUserById(property.landlordId) : null;
+function isClosedTicket(ticket: RepairTicket) {
+  return ["Closed", "Resolved", "Ready for landlord payment approval", "Tenant confirmed fixed"].includes(ticket.status);
+}
+
+function getTicketLandlord(
+  ticket: RepairTicket,
+  findVisiblePropertyById: (propertyId: string) => Property | null,
+  findVisibleUserById: (userId: string) => AppUser | null,
+) {
+  const property = findVisiblePropertyById(ticket.propertyId);
+  return property ? findVisibleUserById(property.landlordId) : null;
 }
 
 function vendorVerificationBucket(profile: VendorProfile) {
@@ -208,26 +221,46 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   const ticketStatusFilter = params.ticketStatus ?? "all";
   const vendorVerificationFilter = params.vendorVerification ?? "all";
   const feedbackStatusFilter = params.feedbackStatus ?? "all";
-  const users = getUsers();
-  const properties = getTenantJoinableProperties();
-  const tickets = getRepairTickets();
-  const supportTickets = getSupportTickets();
-  const vendorProfiles = getVendorProfiles();
+  const includeDemoData = isDemoDataEnabled();
+  const users = includeDemoData ? getUsers() : getUsers().filter((user) => !isDemoUser(user));
+  const visibleUserIds = new Set(users.map((user) => user.id));
+  const properties = (includeDemoData ? getTenantJoinableProperties() : getTenantJoinableProperties().filter((property) => !isDemoProperty(property)))
+    .filter((property) => visibleUserIds.has(property.landlordId));
+  const visiblePropertyIds = new Set(properties.map((property) => property.id));
+  const tickets = (includeDemoData ? getRepairTickets() : getRepairTickets().filter((ticket) => !isDemoRepairTicket(ticket)))
+    .filter((ticket) => visiblePropertyIds.has(ticket.propertyId));
+  const supportTickets = includeDemoData ? getSupportTickets() : getSupportTickets().filter((ticket) => !isDemoSupportTicket(ticket));
+  const vendorProfiles = (includeDemoData ? getVendorProfiles() : getVendorProfiles().filter((profile) => !isDemoVendorProfile(profile)))
+    .filter((profile) => visibleUserIds.has(profile.userId));
+  const findVisibleUserById = (userId: string) => users.find((user) => user.id === userId) ?? null;
+  const findVisiblePropertyById = (propertyId: string) => properties.find((property) => property.id === propertyId) ?? null;
+  const getVisibleApprovedTenantsForProperty = (propertyId: string) =>
+    users.filter((user) => user.role === "tenant" && user.propertyId === propertyId && user.membershipStatus === "Approved");
   const landlords = users.filter((user) => user.role === "landlord");
   const tenants = users.filter((user) => user.role === "tenant");
   const vendorUsers = users.filter((user) => user.role === "vendor");
-  const pendingTenantApprovals = tenants.filter((tenant) => tenant.membershipStatus === "Pending").length;
-  const pendingVendorApprovals = vendorProfiles.filter((profile) => vendorVerificationBucket(profile) === "pending").length;
   const vendorRequests = tickets.flatMap((ticket) =>
     (ticket.vendorRequests ?? []).map((request) => ({
       ticket,
       request,
-      property: findPropertyById(ticket.propertyId),
+      property: findVisiblePropertyById(ticket.propertyId),
     })),
   );
   const approvals = tickets.filter((ticket) => ticket.repairApprovalRequest);
-  const activityFeed = getActivityEvents().slice(0, 16);
-  const notifications = getNotifications();
+  const activityFeed = getActivityEvents()
+    .filter((event) => {
+      if (includeDemoData) return true;
+      if (event.actorUserId && !visibleUserIds.has(event.actorUserId)) return false;
+      if (event.entityType === "property" && event.entityId && !visiblePropertyIds.has(event.entityId)) return false;
+      if (event.entityType === "ticket" && event.entityId && !tickets.some((ticket) => ticket.id === event.entityId)) return false;
+      return true;
+    })
+    .slice(0, 16);
+  const notifications = getNotifications().filter((notification) => {
+    if (includeDemoData) return true;
+    if (notification.userId && !visibleUserIds.has(notification.userId)) return false;
+    return true;
+  });
   const filteredLandlords = landlords.filter((landlord) => {
     if (roleFilter !== "all" && roleFilter !== "landlord") return false;
     const ownedProperties = properties.filter((property) => property.landlordId === landlord.id);
@@ -238,7 +271,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
   });
   const filteredTenants = tenants.filter((tenant) => {
     if (roleFilter !== "all" && roleFilter !== "tenant") return false;
-    const property = tenant.propertyId ? findPropertyById(tenant.propertyId) : null;
+    const property = tenant.propertyId ? findVisiblePropertyById(tenant.propertyId) : null;
     return includesQuery([tenant.name, tenant.email, tenant.savedAddress, property && getPropertyFullAddress(property)], query);
   });
   const filteredVendors = vendorUsers.filter((vendor) => {
@@ -249,12 +282,12 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     return includesQuery([vendor.name, vendor.email, profile?.businessName, profile?.legalContactName, profile?.serviceArea], query);
   });
   const filteredProperties = properties.filter((property) =>
-    includesQuery([property.name, getPropertyFullAddress(property), property.joinCode, findUserById(property.landlordId)?.email], query),
+    includesQuery([property.name, getPropertyFullAddress(property), property.joinCode, findVisibleUserById(property.landlordId)?.email], query),
   );
   const filteredTickets = tickets.filter((ticket) => {
-    const property = findPropertyById(ticket.propertyId);
-    const tenant = findUserById(ticket.tenantUserId);
-    const landlord = property ? findUserById(property.landlordId) : null;
+    const property = findVisiblePropertyById(ticket.propertyId);
+    const tenant = findVisibleUserById(ticket.tenantUserId);
+    const landlord = property ? findVisibleUserById(property.landlordId) : null;
     if (ticketStatusFilter !== "all" && ticket.status !== ticketStatusFilter) return false;
     return includesQuery(
       [ticket.issueTitle, ticket.tenantEmail, property && getPropertyFullAddress(property), tenant?.name, landlord?.email, ticket.vendorBusinessName, ticket.landlordVendorName],
@@ -266,14 +299,12 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
     return includesQuery([ticket.subject, ticket.description, ticket.userEmail, ticket.userName, ticket.userRole], query);
   });
   const summaryCards = [
-    ["Total landlords", landlords.length, "#landlords"],
-    ["Total tenants", tenants.length, "#tenants"],
-    ["Total vendors", vendorUsers.length, "#vendors"],
-    ["Total properties", properties.length, "#properties"],
+    ["Real landlords", landlords.length, "#landlords"],
+    ["Real tenants", tenants.length, "#tenants"],
+    ["Real vendors", vendorUsers.length, "#vendors"],
+    ["Real properties", properties.length, "#properties"],
     ["Open tickets", openCount(tickets), "#tickets"],
-    ["Completed tickets", completionCount(tickets), "#tickets"],
-    ["Pending tenant approvals", pendingTenantApprovals, "#tenants"],
-    ["Pending vendor approvals", pendingVendorApprovals, "#vendors"],
+    ["Closed tickets", tickets.filter(isClosedTicket).length, "#tickets"],
     ["Feedback/help requests", supportTickets.length, "#feedback"],
   ] as const;
 
@@ -385,13 +416,16 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
                 {filteredLandlords.map((landlord) => {
                   const ownedProperties = properties.filter((property) => property.landlordId === landlord.id);
                   const landlordTickets = tickets.filter((ticket) => ownedProperties.some((property) => property.id === ticket.propertyId));
-                  const activeTenants = ownedProperties.reduce((count, property) => count + getApprovedTenantsForProperty(property.id).length, 0);
+                  const activeTenants = ownedProperties.reduce((count, property) => count + getVisibleApprovedTenantsForProperty(property.id).length, 0);
+                  const propertyAddresses = ownedProperties.map(getPropertyFullAddress).join("; ");
                   return (
                     <article key={landlord.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
                       <h3 className="font-display text-xl font-semibold text-ink">{landlord.name ?? landlord.email}</h3>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <Field label="Email" value={landlord.email} />
                         <Field label="Phone" value={null} />
+                        <Field label="Created" value={landlord.createdAt} />
+                        <Field label="Property address" value={propertyAddresses} />
                         <Field label="Properties" value={ownedProperties.length} />
                         <Field label="Active tenants" value={activeTenants} />
                         <Field label="Open tickets" value={openCount(landlordTickets)} />
@@ -405,7 +439,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
               <Section id="tenants" eyebrow="Tenants" title="All tenant accounts">
                 {filteredTenants.map((tenant) => {
-                  const property = tenant.propertyId ? findPropertyById(tenant.propertyId) : null;
+                  const property = tenant.propertyId ? findVisiblePropertyById(tenant.propertyId) : null;
                   const tenantTickets = tickets.filter((ticket) => ticket.tenantUserId === tenant.id);
                   return (
                     <article key={tenant.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
@@ -483,7 +517,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
             <Section id="properties" eyebrow="Properties" title="All properties">
               {filteredProperties.map((property) => {
-                const landlord = findUserById(property.landlordId);
+                const landlord = findVisibleUserById(property.landlordId);
                 const propertyTickets = tickets.filter((ticket) => ticket.propertyId === property.id);
                 return (
                   <article key={property.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
@@ -492,9 +526,9 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
                       <Field label="Address" value={getPropertyFullAddress(property)} />
                       <Field label="Landlord" value={landlord?.email} />
                       <Field label="Property type" value={property.propertyType} />
-                      <Field label="Unit info" value={propertyTypeRequiresUnit(property.propertyType) ? `${property.unitCount} residences` : "Single residence"} />
+                      <Field label="Unit info" value={propertyTypeRequiresUnit(property.propertyType) ? property.unitNumber ? `Unit ${property.unitNumber}` : "Tenant unit captured during approval" : "Single residence"} />
                       <Field label="Join code" value={property.joinCode} />
-                      <Field label="Active tenants" value={getApprovedTenantsForProperty(property.id).length} />
+                      <Field label="Active tenants" value={getVisibleApprovedTenantsForProperty(property.id).length} />
                       <Field label="Tickets" value={propertyTickets.length} />
                       <Field label="Avg completion" value={property.averageCompletionTime} />
                       <Field label="History status" value={property.repairHistorySummary} />
@@ -506,9 +540,9 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
 
             <Section id="tickets" eyebrow="Tickets" title="All repair tickets">
               {filteredTickets.map((ticket) => {
-                const property = findPropertyById(ticket.propertyId);
-                const tenant = findUserById(ticket.tenantUserId);
-                const landlord = getTicketLandlord(ticket);
+                const property = findVisiblePropertyById(ticket.propertyId);
+                const tenant = findVisibleUserById(ticket.tenantUserId);
+                const landlord = getTicketLandlord(ticket, findVisiblePropertyById, findVisibleUserById);
                 return (
                   <article key={ticket.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
                     <h3 className="font-display text-xl font-semibold text-ink">{ticket.issueTitle}</h3>

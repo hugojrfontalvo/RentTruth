@@ -1,4 +1,4 @@
-const DEFAULT_PUBLIC_APP_URL = "https://renttruth.com";
+const DEFAULT_PUBLIC_APP_URL = "https://renttruth.io";
 
 export function getAppUrl() {
   const configuredUrl =

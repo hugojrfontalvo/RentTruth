@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AddressSuggestion, Property, PropertyType } from "@/lib/demo-data";
+import { GoogleAddressAutocomplete } from "@/components/google-address-autocomplete";
 
 type LandlordPropertyFormProps = {
   createPropertyAction: (formData: FormData) => void | Promise<void>;
@@ -19,11 +20,9 @@ type LandlordPropertyFormProps = {
 export function LandlordPropertyForm({
   createPropertyAction,
   propertyTypes,
-  suggestions,
   errorMessage,
   submitLabel = "Create Property",
   initialValues = null,
-  hideUnitCountField = false,
 }: LandlordPropertyFormProps) {
   const defaultPropertyType = initialValues?.propertyType ?? "Apartment";
   const [selectedPropertyType, setSelectedPropertyType] = useState<PropertyType>(defaultPropertyType);
@@ -73,6 +72,8 @@ export function LandlordPropertyForm({
         </div>
       ) : null}
 
+      <GoogleAddressAutocomplete initialValue={helperValue} />
+
       <label className="block">
         <span className="mb-2 block text-sm font-semibold text-slate-700">Building / property street address</span>
         <input
@@ -87,17 +88,16 @@ export function LandlordPropertyForm({
 
       {selectedPropertyType !== "House" ? (
         <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">Apartment / Unit number</span>
+          <span className="mb-2 block text-sm font-semibold text-slate-700">Apartment / Unit number <span className="font-normal text-slate-400">(optional)</span></span>
           <input
             type="text"
             name="unitNumber"
             defaultValue={initialValues?.unitNumber ?? ""}
             placeholder="4B"
-            required
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 uppercase text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
           />
           <span className="mt-2 block text-xs leading-5 text-slate-500">
-            Unit number is required for this property type.
+            Optional for landlord setup. Tenants provide their exact unit when they request access.
           </span>
         </label>
       ) : (
@@ -181,79 +181,13 @@ export function LandlordPropertyForm({
           ))}
         </div>
         <p className="text-sm leading-6 text-slate-500">
-          Select House to remove the unit requirement, or choose a unit-based property type to require it.
+          House is treated as a single residence. Unit-based properties can include a unit here, but tenants still provide their exact unit during approval.
         </p>
       </div>
 
-      <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Address helper
-            </p>
-            <p className="mt-2 text-sm leading-7 text-slate-500">
-              Google-style autocomplete is not connected yet. The fields above are the real source
-              of truth, and this helper only previews demo suggestions for the future workflow.
-            </p>
-          </div>
-          <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600">
-            Manual entry is live
-          </div>
-        </div>
-
-        <label className="mt-5 block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">
-            Helper preview
-          </span>
-          <input
-            type="text"
-            defaultValue={helperValue}
-            list="landlord-address-suggestions"
-            placeholder="Preview future autocomplete behavior"
-            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-          />
-        </label>
-        <datalist id="landlord-address-suggestions">
-          {suggestions.map((suggestion) => (
-            <option key={suggestion.id} value={suggestion.label} />
-          ))}
-        </datalist>
-
-        <div className="mt-4 grid gap-2">
-          {suggestions.slice(0, 4).map((suggestion) => (
-            <div
-              key={suggestion.id}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-700"
-            >
-              <p>{suggestion.label}</p>
-              <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
-                Demo suggestion
-              </p>
-            </div>
-          ))}
-        </div>
+      <div className="rounded-[24px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-7 text-sky-800">
+        RentTruth generates the tenant join code after this property is saved. Tenants add their own unit number when requesting access.
       </div>
-
-      {!hideUnitCountField ? (
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">How many apartments or residences are in this property?</span>
-          <input
-            type="number"
-            min="1"
-            name="unitCount"
-            defaultValue={initialValues?.unitCount ?? ""}
-            placeholder="24"
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-          />
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            For houses, you can leave this blank. For apartments, condos, townhomes, and multi-unit buildings, this describes the property capacity. Tenants still enter their own apartment/unit number when joining.
-          </p>
-        </label>
-      ) : (
-        <div className="rounded-[24px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-7 text-sky-800">
-          Houses are treated as a single residence, so tenants won’t be asked for a unit number later.
-        </div>
-      )}
 
       <button
         type="submit"

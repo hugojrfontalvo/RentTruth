@@ -1133,6 +1133,42 @@ const STORE_SCHEMA_VERSION = 1;
 const STORE_FILE_PATH =
   process.env.RENTTRUTH_DATA_FILE || join(process.cwd(), "data", "renttruth-db.json");
 
+const adminBootstrapUsers = seedUsers.filter((user) => user.id === "admin-owner");
+const demoSeedUserIds = new Set(seedUsers.filter((user) => user.id !== "admin-owner").map((user) => user.id));
+const demoSeedPropertyIds = new Set(seedProperties.map((property) => property.id));
+const demoSeedTicketIds = new Set(seedTickets.map((ticket) => ticket.id));
+const demoSeedVendorProfileUserIds = new Set(seedVendorProfiles.map((profile) => profile.userId));
+const demoSeedSupportTicketIds = new Set(seedSupportTickets.map((ticket) => ticket.id));
+
+export function isDemoDataEnabled() {
+  return process.env.RENTTRUTH_ENABLE_DEMO_DATA === "true";
+}
+
+export function isDemoUser(user: AppUser | null | undefined) {
+  return Boolean(user && demoSeedUserIds.has(user.id));
+}
+
+export function isDemoProperty(property: Property | null | undefined) {
+  return Boolean(property && demoSeedPropertyIds.has(property.id));
+}
+
+export function isDemoRepairTicket(ticket: RepairTicket | null | undefined) {
+  return Boolean(ticket && demoSeedTicketIds.has(ticket.id));
+}
+
+export function isDemoVendorProfile(profile: VendorProfile | null | undefined) {
+  return Boolean(profile && demoSeedVendorProfileUserIds.has(profile.userId));
+}
+
+export function isDemoSupportTicket(ticket: SupportTicket | null | undefined) {
+  return Boolean(
+    ticket &&
+      demoSeedSupportTicketIds.has(ticket.id) &&
+      ticket.userId &&
+      demoSeedUserIds.has(ticket.userId),
+  );
+}
+
 function cloneAccountLinkageSignals(user: AppUser) {
   return user.accountLinkageSignals ? [...user.accountLinkageSignals] : undefined;
 }
@@ -1174,11 +1210,18 @@ function cloneSupportTicket(ticket: SupportTicket): SupportTicket {
 }
 
 function createSeededStore(): DemoStore {
+  const includeDemoData = isDemoDataEnabled();
+  const initialUsers = includeDemoData ? seedUsers : adminBootstrapUsers;
+  const initialProperties = includeDemoData ? seedProperties : [];
+  const initialTickets = includeDemoData ? seedTickets : [];
+  const initialVendorProfiles = includeDemoData ? seedVendorProfiles : [];
+  const initialSupportTickets = includeDemoData ? seedSupportTickets : [];
+
   return {
     schemaVersion: STORE_SCHEMA_VERSION,
-    users: seedUsers.map(cloneUser),
-    properties: seedProperties.map(cloneProperty),
-    tickets: seedTickets.map((ticket) => {
+    users: initialUsers.map(cloneUser),
+    properties: initialProperties.map(cloneProperty),
+    tickets: initialTickets.map((ticket) => {
       const clonedTicket = cloneTicket(ticket);
       return {
         ...clonedTicket,
@@ -1189,17 +1232,29 @@ function createSeededStore(): DemoStore {
           }),
       };
     }),
-    vendorProfiles: seedVendorProfiles.map(cloneVendorProfile),
-    supportTickets: seedSupportTickets.map(cloneSupportTicket),
+    vendorProfiles: initialVendorProfiles.map(cloneVendorProfile),
+    supportTickets: initialSupportTickets.map(cloneSupportTicket),
     activityEvents: [],
     notifications: [],
-    propertyCounter: seedProperties.length + 1,
-    ticketCounter: seedTickets.length + 1,
-    userCounter: seedUsers.length + 1,
-    supportTicketCounter: seedSupportTickets.length + 1,
+    propertyCounter: initialProperties.length + 1,
+    ticketCounter: initialTickets.length + 1,
+    userCounter: initialUsers.length + 1,
+    supportTicketCounter: initialSupportTickets.length + 1,
     activityEventCounter: 1,
     notificationCounter: 1,
   };
+}
+
+function ensureAdminBootstrapUser(store: DemoStore) {
+  for (const adminUser of adminBootstrapUsers) {
+    const hasAdmin =
+      store.users.some((user) => user.id === adminUser.id) ||
+      store.users.some((user) => normalizeEmail(user.email) === normalizeEmail(adminUser.email));
+
+    if (!hasAdmin) {
+      store.users.push(cloneUser(adminUser));
+    }
+  }
 }
 
 function mergeSeedData(store: DemoStore) {
@@ -1251,22 +1306,22 @@ function normalizeCounters(store: DemoStore) {
   store.userCounter = Math.max(
     store.userCounter || 1,
     ...store.users.map((user) => parseCounterFromId(user.id, "user-") + 1),
-    seedUsers.length + 1,
+    isDemoDataEnabled() ? seedUsers.length + 1 : 1,
   );
   store.propertyCounter = Math.max(
     store.propertyCounter || 1,
     ...store.properties.map((property) => parseCounterFromId(property.id, "property-") + 1),
-    seedProperties.length + 1,
+    isDemoDataEnabled() ? seedProperties.length + 1 : 1,
   );
   store.ticketCounter = Math.max(
     store.ticketCounter || 1,
     ...store.tickets.map((ticket) => parseCounterFromId(ticket.id, "ticket-") + 1),
-    seedTickets.length + 1,
+    isDemoDataEnabled() ? seedTickets.length + 1 : 1,
   );
   store.supportTicketCounter = Math.max(
     store.supportTicketCounter || 1,
     ...store.supportTickets.map((ticket) => parseCounterFromId(ticket.id, "support-") + 1),
-    seedSupportTickets.length + 1,
+    isDemoDataEnabled() ? seedSupportTickets.length + 1 : 1,
   );
   store.activityEventCounter = Math.max(
     store.activityEventCounter || 1,
@@ -1304,7 +1359,10 @@ function normalizeStore(input: Partial<DemoStore>): DemoStore {
     notificationCounter: input.notificationCounter ?? 1,
   };
 
-  mergeSeedData(store);
+  ensureAdminBootstrapUser(store);
+  if (isDemoDataEnabled()) {
+    mergeSeedData(store);
+  }
   normalizeCounters(store);
   return store;
 }

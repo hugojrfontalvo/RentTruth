@@ -8,7 +8,6 @@ import {
   isPropertyType,
   landlordCloseTicket,
   normalizeZipCode,
-  propertyTypeRequiresUnit,
   updatePropertyForLandlord,
 } from "@/lib/demo-data";
 
@@ -26,8 +25,6 @@ export async function createPropertyAction(formData: FormData) {
   const city = String(formData.get("city") ?? "").trim();
   const state = String(formData.get("state") ?? "").trim();
   const zip = normalizeZipCode(String(formData.get("zip") ?? ""));
-  const unitCountRaw = String(formData.get("unitCount") ?? "").trim();
-  const unitCountValue = unitCountRaw ? Number(unitCountRaw) : undefined;
 
   if (!isPropertyType(propertyTypeValue)) {
     redirect("/dashboard/landlord?error=property-type-required");
@@ -35,10 +32,6 @@ export async function createPropertyAction(formData: FormData) {
 
   if (!streetAddress) {
     redirect("/dashboard/landlord?error=street-required");
-  }
-
-  if (propertyTypeRequiresUnit(propertyTypeValue) && !unitNumber) {
-    redirect("/dashboard/landlord?error=unit-required");
   }
 
   if (!city) {
@@ -57,13 +50,6 @@ export async function createPropertyAction(formData: FormData) {
     redirect("/dashboard/landlord?error=zip-invalid");
   }
 
-  if (
-    propertyTypeValue !== "House" &&
-    (!unitCountValue || Number.isNaN(unitCountValue) || unitCountValue <= 0)
-  ) {
-    redirect("/dashboard/landlord?error=unit-count-required");
-  }
-
   const property = createPropertyForLandlord({
     landlordId: session.id,
     propertyType: propertyTypeValue,
@@ -73,7 +59,7 @@ export async function createPropertyAction(formData: FormData) {
     city,
     state,
     zip,
-    unitCount: propertyTypeValue === "House" ? 1 : unitCountValue,
+    unitCount: 1,
   });
 
   redirect(`/dashboard/landlord?created=1&property=${property.id}`);
@@ -105,10 +91,6 @@ export async function updatePropertyAction(formData: FormData) {
 
   if (!streetAddress) {
     redirect(`/dashboard/landlord?edit=1&property=${propertyId}&error=street-required`);
-  }
-
-  if (propertyTypeRequiresUnit(propertyTypeValue) && !unitNumber) {
-    redirect(`/dashboard/landlord?edit=1&property=${propertyId}&error=unit-required`);
   }
 
   if (!city) {

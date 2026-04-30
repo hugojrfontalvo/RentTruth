@@ -101,10 +101,6 @@ function getCreatePropertyErrorMessage(error?: string) {
     return "Enter the full street address to create the property.";
   }
 
-  if (error === "unit-required") {
-    return "Enter the apartment or unit number for this non-house property.";
-  }
-
   if (error === "city-required") {
     return "Enter the city for this property.";
   }
@@ -119,10 +115,6 @@ function getCreatePropertyErrorMessage(error?: string) {
 
   if (error === "zip-invalid") {
     return "Enter a valid 5-digit ZIP code. ZIP+4 is okay; RentTruth will save only the first 5 digits.";
-  }
-
-  if (error === "unit-count-required") {
-    return "Enter how many residences are in this property. Houses stay single-residence automatically.";
   }
 
   return null;
@@ -1340,7 +1332,7 @@ export default async function LandlordDashboardPage({
                 Set up properties without unit confusion
               </h2>
               <p className="mt-4 text-base leading-7 text-slate-600">
-                Choose the property type first, then confirm the full address. Manual address entry is the real flow today, with a small demo helper for future autocomplete-ready behavior.
+                Add the rental address, choose the property type, and RentTruth will generate the tenant join code. Google autocomplete fills the manual fields when configured.
               </p>
               <LandlordPropertyForm
                 createPropertyAction={createPropertyAction}
