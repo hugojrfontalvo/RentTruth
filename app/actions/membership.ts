@@ -8,6 +8,7 @@ import {
   findPropertyByJoinCode,
   findPropertyBySavedAddress,
   findUserById,
+  flushPersistentStore,
   formatTenantAddress,
   isValidNormalizedZip,
   normalizeZipCode,
@@ -43,6 +44,7 @@ export async function approveTenantAction(formData: FormData) {
   }
 
   updateTenantMembershipStatus(tenantUserId, "Approved");
+  await flushPersistentStore();
   redirect("/dashboard/landlord?membership=approved");
 }
 
@@ -58,6 +60,7 @@ export async function denyTenantAction(formData: FormData) {
   }
 
   updateTenantMembershipStatus(tenantUserId, "Denied");
+  await flushPersistentStore();
   redirect("/dashboard/landlord?membership=denied");
 }
 
@@ -73,6 +76,7 @@ export async function removeTenantAction(formData: FormData) {
   }
 
   clearTenantPropertyMembership(tenantUserId, "Removed");
+  await flushPersistentStore();
   redirect("/dashboard/landlord?membership=removed");
 }
 
@@ -88,6 +92,7 @@ export async function markTenantMovedOutAction(formData: FormData) {
   }
 
   clearTenantPropertyMembership(tenantUserId, "Left Property");
+  await flushPersistentStore();
   redirect("/dashboard/landlord?membership=moved-out");
 }
 
@@ -103,6 +108,7 @@ export async function tenantLeavePropertyAction() {
   }
 
   clearTenantPropertyMembership(session.id, "Left Property");
+  await flushPersistentStore();
   redirect("/dashboard/tenant?membership=left");
 }
 
@@ -167,6 +173,7 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
       propertyType: normalizedSavedPropertyType,
       unitNumber: propertyTypeRequiresUnit(normalizedSavedPropertyType) ? unitNumber : undefined,
     });
+    await flushPersistentStore();
     redirect("/dashboard/tenant?membership=address-saved");
   }
 
@@ -242,6 +249,7 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
       : undefined,
     requestedAt: "Today",
   });
+  await flushPersistentStore();
 
   redirect("/dashboard/tenant?membership=requested");
 }
@@ -256,6 +264,7 @@ export async function resetJoinCodeAction(formData: FormData) {
   if (!property) {
     redirect("/dashboard/landlord");
   }
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?membership=code-reset&property=${property.id}`);
 }

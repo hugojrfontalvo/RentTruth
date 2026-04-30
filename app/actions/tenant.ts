@@ -6,6 +6,7 @@ import {
   createRepairTicketAttachment,
   createTicketForTenant,
   findPropertyById,
+  flushPersistentStore,
   propertyTypeRequiresUnit,
   tenantConfirmTicketOutcome,
 } from "@/lib/demo-data";
@@ -127,6 +128,7 @@ export async function submitTenantRepairRequest(formData: FormData) {
     attachment,
     urgent,
   });
+  await flushPersistentStore();
 
   redirect("/dashboard/tenant?submitted=1");
 }
@@ -152,6 +154,7 @@ export async function tenantConfirmRepairFixedAction(formData: FormData) {
     outcome: "fixed",
     feedback,
   });
+  await flushPersistentStore();
 
   redirect("/dashboard/tenant?repair=confirmed");
 }
@@ -167,6 +170,7 @@ export async function tenantReportRepairStillBrokenAction(formData: FormData) {
     outcome: "not-fixed",
     feedback,
   });
+  await flushPersistentStore();
 
   redirect("/dashboard/tenant?repair=follow-up");
 }

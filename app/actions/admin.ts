@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
 import { isAdminSession } from "@/lib/admin-access";
 import {
+  flushPersistentStore,
   getSupportTicketStatuses,
   updateSupportTicketByAdmin,
   updateVendorVerificationProfile,
@@ -79,6 +80,7 @@ export async function updateVendorVerificationAction(formData: FormData) {
     insuranceStatus: insurance,
     backgroundCheckStatus: background,
   });
+  await flushPersistentStore();
   redirect("/dashboard/admin?admin=vendor-updated#vendors");
 }
 
@@ -98,6 +100,7 @@ export async function updateFeedbackStatusAction(formData: FormData) {
     status,
     adminNotes,
   });
+  await flushPersistentStore();
   redirect("/dashboard/admin?admin=feedback-updated#feedback");
 }
 
@@ -116,5 +119,6 @@ export async function markFeedbackResolvedAction(formData: FormData) {
     status: "Resolved",
     adminNotes,
   });
+  await flushPersistentStore();
   redirect("/dashboard/admin?admin=feedback-resolved#feedback");
 }

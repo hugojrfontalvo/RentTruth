@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
 import {
   createPropertyForLandlord,
+  flushPersistentStore,
   isValidNormalizedZip,
   isPropertyType,
   landlordCloseTicket,
@@ -61,6 +62,7 @@ export async function createPropertyAction(formData: FormData) {
     zip,
     unitCount: 1,
   });
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?created=1&property=${property.id}`);
 }
@@ -124,6 +126,7 @@ export async function updatePropertyAction(formData: FormData) {
   if (!property) {
     redirect(`/dashboard/landlord?edit=1&property=${propertyId}&error=property-not-found`);
   }
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?updated=1&property=${property.id}&code=preserved`);
 }
@@ -147,5 +150,6 @@ export async function landlordCloseTicketAction(formData: FormData) {
     reviewNotes,
     paymentMethod,
   });
+  await flushPersistentStore();
   redirect("/dashboard/landlord?review=closed");
 }

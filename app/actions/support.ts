@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
 import {
   createSupportTicket,
+  flushPersistentStore,
   getSupportTicketCategories,
   getSupportTicketUrgencies,
   type SupportTicketCategory,
@@ -56,6 +57,7 @@ export async function submitSupportTicketAction(formData: FormData) {
     userEmail: session.email,
     userName: session.name,
   });
+  await flushPersistentStore();
 
   redirect("/support?submitted=1");
 }

@@ -3,6 +3,7 @@ import {
   getPropertyDisplayName,
   getPropertyFullAddress,
   getPropertyTrustSignal,
+  hydratePersistentStore,
   searchPropertiesByAddress,
 } from "@/lib/demo-data";
 
@@ -11,6 +12,7 @@ export default async function ResearchPage({
 }: {
   searchParams?: Promise<{ address?: string }>;
 }) {
+  await hydratePersistentStore();
   const params = (await searchParams) ?? {};
   const query = params.address?.trim() ?? "";
   const matches = searchPropertiesByAddress(query);

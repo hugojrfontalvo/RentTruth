@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPublicPropertyProfile } from "@/lib/demo-data";
+import { getPublicPropertyProfile, hydratePersistentStore } from "@/lib/demo-data";
 
 export default async function PropertyProfilePage({
   params,
 }: {
   params: Promise<{ propertyId: string }>;
 }) {
+  await hydratePersistentStore();
   const { propertyId } = await params;
   const profile = getPublicPropertyProfile(propertyId);
 

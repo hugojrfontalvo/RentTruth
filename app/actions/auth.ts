@@ -6,6 +6,8 @@ import {
   createUser,
   findUserByEmail,
   findUserById,
+  flushPersistentStore,
+  hydratePersistentStore,
   validateUserLogin,
 } from "@/lib/demo-data";
 import {
@@ -128,6 +130,7 @@ function parseSessionCookie(raw: string): SessionCookiePayload | null {
 }
 
 export async function loginAction(formData: FormData) {
+  await hydratePersistentStore();
   const { email, password, role } = extractLoginCredentials(formData);
   console.log(`${role} login submitted`);
   const adminUser = isConfiguredAdminEmail(email) ? findUserByEmail(email) : null;
@@ -150,6 +153,7 @@ export async function loginAction(formData: FormData) {
 }
 
 export async function signupAction(formData: FormData) {
+  await hydratePersistentStore();
   const { email, password, role } = extractSignupCredentials(formData);
   console.log(`${role} signup submitted`);
   const name = String(formData.get("name") ?? "").trim();
@@ -164,6 +168,7 @@ export async function signupAction(formData: FormData) {
     password,
     role,
   });
+  await flushPersistentStore();
 
   const sessionSaved = await writeSessionCookie(user);
   const redirectPath = getPostAuthDashboardPath(user.role);
@@ -180,6 +185,7 @@ export async function logoutAction() {
 }
 
 export async function getSession(): Promise<SessionUser | null> {
+  await hydratePersistentStore();
   const raw = (await cookies()).get(SESSION_COOKIE)?.value;
 
   if (!raw) {

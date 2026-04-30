@@ -5,6 +5,7 @@ import { getSession } from "@/app/actions/auth";
 import {
   assignLandlordVendorToTicket,
   assignVendorToTicket,
+  flushPersistentStore,
   getCommonRepairPricingItems,
   findUserById,
   findVendorProfileByUserId,
@@ -160,6 +161,7 @@ export async function saveVendorProfileAction(formData: FormData) {
 
   const profile = buildVendorProfileInput(session.id, session.email, formData);
   upsertVendorProfile(profile);
+  await flushPersistentStore();
   redirect("/dashboard/vendor?saved=1");
 }
 
@@ -169,6 +171,7 @@ export async function vendorRequestAssignmentAction(formData: FormData) {
 
   const ticketId = readString(formData, "ticketId");
   vendorRequestTicket(ticketId, session.id);
+  await flushPersistentStore();
   redirect("/dashboard/vendor?job=requested");
 }
 
@@ -178,6 +181,7 @@ export async function vendorDeclineAssignmentAction(formData: FormData) {
 
   const ticketId = readString(formData, "ticketId");
   vendorDeclineTicket(ticketId, session.id);
+  await flushPersistentStore();
   redirect("/dashboard/vendor?job=declined");
 }
 
@@ -187,6 +191,7 @@ export async function vendorMarkArrivedAction(formData: FormData) {
 
   const ticketId = readString(formData, "ticketId");
   vendorMarkArrived(ticketId, session.id);
+  await flushPersistentStore();
   redirect("/dashboard/vendor?job=arrived");
 }
 
@@ -196,6 +201,7 @@ export async function vendorMarkInProgressAction(formData: FormData) {
 
   const ticketId = readString(formData, "ticketId");
   vendorMarkInProgress(ticketId, session.id);
+  await flushPersistentStore();
   redirect("/dashboard/vendor?job=in-progress");
 }
 
@@ -206,6 +212,7 @@ export async function vendorMarkCompletedAction(formData: FormData) {
   const ticketId = readString(formData, "ticketId");
   const completionNotes = readString(formData, "completionNotes");
   vendorMarkCompleted(ticketId, session.id, completionNotes);
+  await flushPersistentStore();
   redirect("/dashboard/vendor?job=completed");
 }
 
@@ -236,6 +243,7 @@ export async function vendorSubmitRepairApprovalRequestAction(formData: FormData
     laborImpact,
     notes,
   });
+  await flushPersistentStore();
   redirect("/dashboard/vendor?job=approval-requested");
 }
 
@@ -254,6 +262,7 @@ export async function assignVendorAction(formData: FormData) {
   if (!ticket || !vendorUser) {
     redirect("/dashboard/landlord?vendor=assign-failed");
   }
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?vendor=assigned&ticket=${ticket.id}&assignedVendor=${vendorUserId}`);
 }
@@ -286,6 +295,7 @@ export async function assignLandlordVendorAction(formData: FormData) {
   if (!ticket) {
     redirect("/dashboard/landlord?vendor=assign-failed");
   }
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?vendor=own-vendor-assigned&ticket=${ticket.id}`);
 }
@@ -306,6 +316,7 @@ export async function landlordMarkOwnVendorArrivedAction(formData: FormData) {
   if (!ticket) {
     redirect("/dashboard/landlord?vendor=own-vendor-status-failed");
   }
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?vendor=own-vendor-arrived&ticket=${ticket.id}`);
 }
@@ -328,6 +339,7 @@ export async function landlordMarkOwnVendorCompletedAction(formData: FormData) {
   if (!ticket) {
     redirect("/dashboard/landlord?vendor=own-vendor-status-failed");
   }
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?vendor=own-vendor-completed&ticket=${ticket.id}`);
 }
@@ -346,6 +358,7 @@ export async function declineVendorRequestAction(formData: FormData) {
   if (!ticket) {
     redirect("/dashboard/landlord?vendor=assign-failed");
   }
+  await flushPersistentStore();
 
   redirect(`/dashboard/landlord?vendor=declined&ticket=${ticket.id}`);
 }
@@ -370,6 +383,7 @@ export async function landlordApproveRepairRequestAction(formData: FormData) {
     decision: "Approved",
     reviewNotes,
   });
+  await flushPersistentStore();
   redirect("/dashboard/landlord?repair=approved");
 }
 
@@ -383,6 +397,7 @@ export async function landlordDeclineRepairRequestAction(formData: FormData) {
     decision: "Declined",
     reviewNotes,
   });
+  await flushPersistentStore();
   redirect("/dashboard/landlord?repair=declined");
 }
 
@@ -396,5 +411,6 @@ export async function landlordRequestRepairFollowUpAction(formData: FormData) {
     decision: "Request follow-up",
     reviewNotes,
   });
+  await flushPersistentStore();
   redirect("/dashboard/landlord?repair=follow-up");
 }

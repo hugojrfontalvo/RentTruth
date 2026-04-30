@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "fs";
+import { after } from "next/server";
 import { dirname, join } from "path";
+import { Pool } from "pg";
 import { type AppRole, type UserRole } from "@/lib/auth";
 
 export type MembershipStatus =
@@ -1132,6 +1134,42 @@ const seedSupportTickets: SupportTicket[] = [
 const STORE_SCHEMA_VERSION = 1;
 const STORE_FILE_PATH =
   process.env.RENTTRUTH_DATA_FILE || join(process.cwd(), "data", "renttruth-db.json");
+const DATABASE_STORE_ID = "primary";
+
+let databasePool: Pool | null = null;
+let databaseHydrationPromise: Promise<void> | null = null;
+let databaseWriteQueue: Promise<void> = Promise.resolve();
+
+function getDatabaseUrl() {
+  return process.env.DATABASE_URL?.trim() || "";
+}
+
+function isDatabasePersistenceEnabled() {
+  return Boolean(getDatabaseUrl());
+}
+
+function getDatabasePool() {
+  const databaseUrl = getDatabaseUrl();
+
+  if (!databaseUrl) {
+    return null;
+  }
+
+  if (!databasePool) {
+    const parsedUrl = new URL(databaseUrl);
+    const isLocalhost =
+      parsedUrl.hostname === "localhost" ||
+      parsedUrl.hostname === "127.0.0.1" ||
+      parsedUrl.hostname === "::1";
+
+    databasePool = new Pool({
+      connectionString: databaseUrl,
+      ssl: isLocalhost ? undefined : { rejectUnauthorized: false },
+    });
+  }
+
+  return databasePool;
+}
 
 const adminBootstrapUsers = seedUsers.filter((user) => user.id === "admin-owner");
 const demoSeedUserIds = new Set(seedUsers.filter((user) => user.id !== "admin-owner").map((user) => user.id));
@@ -1367,6 +1405,97 @@ function normalizeStore(input: Partial<DemoStore>): DemoStore {
   return store;
 }
 
+function cloneStoreSnapshot(input: DemoStore): DemoStore {
+  return normalizeStore(JSON.parse(JSON.stringify(input)) as Partial<DemoStore>);
+}
+
+function replaceArray<T>(target: T[], next: T[]) {
+  target.splice(0, target.length, ...next);
+}
+
+function applyStoreSnapshot(nextStore: DemoStore) {
+  store.schemaVersion = nextStore.schemaVersion;
+  replaceArray(store.users, nextStore.users);
+  replaceArray(store.properties, nextStore.properties);
+  replaceArray(store.tickets, nextStore.tickets);
+  replaceArray(store.vendorProfiles, nextStore.vendorProfiles);
+  replaceArray(store.supportTickets, nextStore.supportTickets);
+  replaceArray(store.activityEvents, nextStore.activityEvents);
+  replaceArray(store.notifications, nextStore.notifications);
+  store.propertyCounter = nextStore.propertyCounter;
+  store.ticketCounter = nextStore.ticketCounter;
+  store.userCounter = nextStore.userCounter;
+  store.supportTicketCounter = nextStore.supportTicketCounter;
+  store.activityEventCounter = nextStore.activityEventCounter;
+  store.notificationCounter = nextStore.notificationCounter;
+}
+
+async function ensureDatabaseStoreTable(pool: Pool) {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS renttruth_store (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+}
+
+async function readDatabaseStore() {
+  const pool = getDatabasePool();
+
+  if (!pool) {
+    return null;
+  }
+
+  await ensureDatabaseStoreTable(pool);
+  const result = await pool.query<{ data: Partial<DemoStore> }>(
+    "SELECT data FROM renttruth_store WHERE id = $1 LIMIT 1",
+    [DATABASE_STORE_ID],
+  );
+  const row = result.rows[0];
+
+  return row?.data ? normalizeStore(row.data) : null;
+}
+
+async function writeDatabaseStoreSnapshot(snapshot: DemoStore) {
+  const pool = getDatabasePool();
+
+  if (!pool) {
+    return;
+  }
+
+  await ensureDatabaseStoreTable(pool);
+  await pool.query(
+    `
+      INSERT INTO renttruth_store (id, data, updated_at)
+      VALUES ($1, $2::jsonb, now())
+      ON CONFLICT (id)
+      DO UPDATE SET data = EXCLUDED.data, updated_at = now()
+    `,
+    [DATABASE_STORE_ID, JSON.stringify(snapshot)],
+  );
+}
+
+function queueDatabaseWrite() {
+  const snapshot = cloneStoreSnapshot(store);
+
+  databaseWriteQueue = databaseWriteQueue
+    .catch(() => undefined)
+    .then(() => writeDatabaseStoreSnapshot(snapshot))
+    .catch((error) => {
+      console.error(
+        "RentTruth database store could not be written. Check DATABASE_URL and database permissions.",
+        error,
+      );
+    });
+
+  try {
+    after(() => databaseWriteQueue);
+  } catch {
+    // Outside a Next.js request lifecycle, the queued promise still runs normally.
+  }
+}
+
 function readPersistentStore() {
   if (!existsSync(STORE_FILE_PATH)) {
     return null;
@@ -1381,6 +1510,11 @@ function readPersistentStore() {
 }
 
 function writePersistentStore(store: DemoStore) {
+  if (isDatabasePersistenceEnabled()) {
+    queueDatabaseWrite();
+    return;
+  }
+
   try {
     mkdirSync(dirname(STORE_FILE_PATH), { recursive: true });
     const payload = JSON.stringify(store, null, 2);
@@ -1398,6 +1532,10 @@ function writePersistentStore(store: DemoStore) {
 }
 
 function createDemoStore(): DemoStore {
+  if (isDatabasePersistenceEnabled()) {
+    return createSeededStore();
+  }
+
   const persistentStore = readPersistentStore();
 
   if (persistentStore) {
@@ -1430,6 +1568,42 @@ const notifications = store.notifications;
 
 function persistStore() {
   writePersistentStore(store);
+}
+
+export async function hydratePersistentStore() {
+  if (!isDatabasePersistenceEnabled()) {
+    return;
+  }
+
+  databaseHydrationPromise = (async () => {
+    try {
+      const databaseStore = await readDatabaseStore();
+
+      if (databaseStore) {
+        applyStoreSnapshot(databaseStore);
+      } else {
+        const localStore = readPersistentStore();
+        const initialStore = localStore ?? cloneStoreSnapshot(store);
+        applyStoreSnapshot(initialStore);
+        await writeDatabaseStoreSnapshot(cloneStoreSnapshot(store));
+      }
+    } catch (error) {
+      console.error(
+        "RentTruth database store could not be read. Check DATABASE_URL and database permissions.",
+        error,
+      );
+    }
+  })();
+
+  await databaseHydrationPromise;
+}
+
+export async function flushPersistentStore() {
+  if (!isDatabasePersistenceEnabled()) {
+    return;
+  }
+
+  await databaseWriteQueue;
 }
 
 function recordActivity(input: {
