@@ -1154,6 +1154,18 @@ function isDatabasePersistenceEnabled() {
   return Boolean(getDatabaseUrl());
 }
 
+function requiresDurablePersistence() {
+  return process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
+}
+
+function assertLocalFilePersistenceAllowed() {
+  if (requiresDurablePersistence()) {
+    throw new Error(
+      "Production persistence requires DATABASE_URL, POSTGRES_URL, POSTGRES_PRISMA_URL, or POSTGRES_URL_NON_POOLING. Local file storage is disabled in production.",
+    );
+  }
+}
+
 function getDatabasePool() {
   const databaseUrl = getDatabaseUrl();
 
@@ -1521,24 +1533,31 @@ function writePersistentStore(store: DemoStore) {
     return;
   }
 
-  try {
-    mkdirSync(dirname(STORE_FILE_PATH), { recursive: true });
-    const payload = JSON.stringify(store, null, 2);
-    const tempPath = `${STORE_FILE_PATH}.${process.pid}.${Date.now()}.${Math.random()
-      .toString(36)
-      .slice(2)}.tmp`;
-    writeFileSync(tempPath, payload);
-    renameSync(tempPath, STORE_FILE_PATH);
-  } catch (error) {
-    console.error(
-      "RentTruth persistent store could not be written. Configure RENTTRUTH_DATA_FILE to a writable durable path.",
-      error,
-    );
+  assertLocalFilePersistenceAllowed();
+  mkdirSync(dirname(STORE_FILE_PATH), { recursive: true });
+  const payload = JSON.stringify(store, null, 2);
+  const tempPath = `${STORE_FILE_PATH}.${process.pid}.${Date.now()}.${Math.random()
+    .toString(36)
+    .slice(2)}.tmp`;
+  writeFileSync(tempPath, payload);
+  renameSync(tempPath, STORE_FILE_PATH);
+}
+
+async function persistStoreNow() {
+  if (isDatabasePersistenceEnabled()) {
+    await writeDatabaseStoreSnapshot(cloneStoreSnapshot(store));
+    return;
   }
+
+  writePersistentStore(store);
 }
 
 function createDemoStore(): DemoStore {
   if (isDatabasePersistenceEnabled()) {
+    return createSeededStore();
+  }
+
+  if (requiresDurablePersistence()) {
     return createSeededStore();
   }
 
@@ -1573,7 +1592,12 @@ const activityEvents = store.activityEvents;
 const notifications = store.notifications;
 
 function persistStore() {
-  writePersistentStore(store);
+  try {
+    writePersistentStore(store);
+  } catch (error) {
+    console.error("RentTruth persistent store could not be written.", error);
+    throw error;
+  }
 }
 
 export async function hydratePersistentStore() {
@@ -1588,7 +1612,7 @@ export async function hydratePersistentStore() {
       if (databaseStore) {
         applyStoreSnapshot(databaseStore);
       } else {
-        const localStore = readPersistentStore();
+        const localStore = requiresDurablePersistence() ? null : readPersistentStore();
         const initialStore = localStore ?? cloneStoreSnapshot(store);
         applyStoreSnapshot(initialStore);
         await writeDatabaseStoreSnapshot(cloneStoreSnapshot(store));
@@ -1598,6 +1622,9 @@ export async function hydratePersistentStore() {
         "RentTruth database store could not be read. Check DATABASE_URL and database permissions.",
         error,
       );
+      if (requiresDurablePersistence()) {
+        throw error;
+      }
     }
   })();
 
@@ -2341,7 +2368,8 @@ export function validateUserLogin(email: string, password: string, role: AppRole
   return user;
 }
 
-export function createUser(input: CreateUserInput) {
+export function createUser(input: CreateUserInput, options: { persist?: boolean } = {}) {
+  const shouldPersist = options.persist ?? true;
   const normalizedEmail = normalizeEmail(input.email);
   const user: AppUser = {
     id: `user-${store.userCounter}`,
@@ -2377,8 +2405,23 @@ export function createUser(input: CreateUserInput) {
     entityId: user.id,
     message: `${user.role} account created for ${user.email}.`,
   });
-  persistStore();
+  if (shouldPersist) {
+    persistStore();
+  }
   return user;
+}
+
+export async function createUserPersisted(input: CreateUserInput) {
+  const previousStore = cloneStoreSnapshot(store);
+
+  try {
+    const user = createUser(input, { persist: false });
+    await persistStoreNow();
+    return user;
+  } catch (error) {
+    applyStoreSnapshot(previousStore);
+    throw error;
+  }
 }
 
 function findPainPointLabel(ticket: SupportTicket) {

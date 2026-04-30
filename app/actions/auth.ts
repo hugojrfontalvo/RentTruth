@@ -3,10 +3,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  createUser,
+  createUserPersisted,
   findUserByEmail,
   findUserById,
-  flushPersistentStore,
   hydratePersistentStore,
   validateUserLogin,
 } from "@/lib/demo-data";
@@ -138,6 +137,13 @@ export async function loginAction(formData: FormData) {
     adminUser?.role === "admin" && adminUser.password === password
       ? adminUser
       : validateUserLogin(email, password, role);
+  console.log("login user lookup result", {
+    email,
+    requestedRole: role,
+    found: Boolean(user),
+    userId: user?.id,
+    userRole: user?.role,
+  });
 
   if (!user) {
     redirect(`/login?error=invalid-credentials&role=${role}`);
@@ -162,13 +168,25 @@ export async function signupAction(formData: FormData) {
     redirect(`/signup?error=email-taken&role=${role}`);
   }
 
-  const user = createUser({
-    name,
-    email,
-    password,
-    role,
-  });
-  await flushPersistentStore();
+  let user;
+
+  try {
+    console.log("user save started", { email, role });
+    user = await createUserPersisted({
+      name,
+      email,
+      password,
+      role,
+    });
+    console.log("user saved successfully", {
+      email: user.email,
+      role: user.role,
+      userId: user.id,
+    });
+  } catch (error) {
+    console.error("user save failed", { email, role, error });
+    redirect(`/signup?error=save-failed&role=${role}`);
+  }
 
   const sessionSaved = await writeSessionCookie(user);
   const redirectPath = getPostAuthDashboardPath(user.role);

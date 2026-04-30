@@ -167,7 +167,9 @@ function SignupForm({
       ? "That email is already in use. Try logging in instead."
       : error === "missing-fields"
         ? "Enter the required fields to create an account."
-        : null;
+        : error === "save-failed"
+          ? "We could not save your account yet. Please try again in a moment."
+          : null;
 
   return (
     <>
