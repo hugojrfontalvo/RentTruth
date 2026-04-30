@@ -1141,7 +1141,13 @@ let databaseHydrationPromise: Promise<void> | null = null;
 let databaseWriteQueue: Promise<void> = Promise.resolve();
 
 function getDatabaseUrl() {
-  return process.env.DATABASE_URL?.trim() || "";
+  return (
+    process.env.DATABASE_URL?.trim() ||
+    process.env.POSTGRES_URL?.trim() ||
+    process.env.POSTGRES_PRISMA_URL?.trim() ||
+    process.env.POSTGRES_URL_NON_POOLING?.trim() ||
+    ""
+  );
 }
 
 function isDatabasePersistenceEnabled() {

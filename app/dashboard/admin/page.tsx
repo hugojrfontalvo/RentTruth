@@ -35,6 +35,9 @@ import {
   propertyTypeRequiresUnit,
 } from "@/lib/demo-data";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type AdminDashboardProps = {
   searchParams?: Promise<{
     q?: string;
