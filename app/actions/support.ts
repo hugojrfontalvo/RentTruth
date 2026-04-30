@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
+import { notifyAdminOfNewFeedback } from "@/lib/notifications";
 import {
   createSupportTicket,
   flushPersistentStore,
@@ -31,9 +32,13 @@ export async function submitSupportTicketAction(formData: FormData) {
   }
 
   const categoryValue = readString(formData, "category");
-  const subject = readString(formData, "subject");
-  const description = readString(formData, "description");
+  const message = readString(formData, "message");
+  const subject =
+    readString(formData, "subject") ||
+    (message ? `App feedback from ${session.role}` : "");
+  const description = readString(formData, "description") || message;
   const urgencyValue = readString(formData, "urgency");
+  const contactEmail = readString(formData, "contactEmail") || session.email;
   const screenshotPlaceholder =
     readString(formData, "screenshotPlaceholder") || "No file uploaded";
 
@@ -54,10 +59,15 @@ export async function submitSupportTicketAction(formData: FormData) {
     urgency: urgencyValue,
     userRole: session.role,
     userId: session.id,
-    userEmail: session.email,
+    userEmail: contactEmail,
     userName: session.name,
   });
   await flushPersistentStore();
+  await notifyAdminOfNewFeedback({
+    message: description,
+    userEmail: contactEmail,
+    role: session.role,
+  });
 
   redirect("/support?submitted=1");
 }

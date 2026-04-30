@@ -12,7 +12,7 @@ type SupportPageProps = {
 
 function getSupportErrorMessage(error?: string) {
   if (error === "missing-fields") {
-    return "Choose a category and urgency, then add a subject and description before submitting.";
+    return "Add a message before submitting feedback.";
   }
 
   return null;
@@ -102,10 +102,10 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
                 New ticket
               </p>
               <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-ink">
-                Help, report an issue, or suggest a feature
+                App Help & Feedback
               </h2>
               <p className="mt-4 text-base leading-7 text-slate-600">
-                Your role and account email are filled in automatically so support can respond with the right product context.
+                Send one clear message to RentTruth. Your role is detected automatically, and your email is prefilled so we can follow up if needed.
               </p>
 
               <SupportTicketForm

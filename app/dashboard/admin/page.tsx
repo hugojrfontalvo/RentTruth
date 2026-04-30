@@ -587,7 +587,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
               </Section>
             </div>
 
-            <Section id="feedback" eyebrow="Feedback and help" title="Support requests with admin notes">
+            <Section id="feedback" eyebrow="Feedback and help" title="Feedback / Support Requests">
               {filteredFeedback.map((ticket: SupportTicket) => (
                 <article key={ticket.id} className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
                   <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
@@ -597,6 +597,7 @@ export default async function AdminDashboardPage({ searchParams }: AdminDashboar
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         <Field label="User" value={ticket.userName ?? ticket.userEmail} />
                         <Field label="Role" value={ticket.userRole} />
+                        <Field label="Email" value={ticket.userEmail} />
                         <Field label="Created" value={ticket.createdAt} />
                         <Field label="Admin notes" value={ticket.adminNotes} />
                       </div>
