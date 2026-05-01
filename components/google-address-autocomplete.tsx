@@ -16,9 +16,34 @@ type GooglePlaceResult = {
   address_components?: GoogleAddressComponent[];
 };
 
-type GoogleAutocomplete = {
-  addListener: (eventName: "place_changed", callback: () => void) => void;
-  getPlace: () => GooglePlaceResult;
+type GooglePrediction = {
+  description: string;
+  place_id: string;
+  structured_formatting?: {
+    main_text?: string;
+    secondary_text?: string;
+  };
+};
+
+type GoogleAutocompleteService = {
+  getPlacePredictions: (
+    request: {
+      input: string;
+      componentRestrictions?: { country: string | string[] };
+      types?: string[];
+    },
+    callback: (predictions: GooglePrediction[] | null, status: string) => void,
+  ) => void;
+};
+
+type GooglePlacesService = {
+  getDetails: (
+    request: {
+      placeId: string;
+      fields: string[];
+    },
+    callback: (place: GooglePlaceResult | null, status: string) => void,
+  ) => void;
 };
 
 declare global {
@@ -26,21 +51,21 @@ declare global {
     google?: {
       maps?: {
         places?: {
-          Autocomplete: new (
-            input: HTMLInputElement,
-            options?: {
-              fields?: string[];
-              types?: string[];
-              componentRestrictions?: { country: string | string[] };
-            },
-          ) => GoogleAutocomplete;
+          AutocompleteService: new () => GoogleAutocompleteService;
+          PlacesService: new (container: HTMLDivElement) => GooglePlacesService;
+          PlacesServiceStatus?: {
+            OK?: string;
+            ZERO_RESULTS?: string;
+          };
         };
       };
     };
+    __renttruthGoogleMapsLoaded?: () => void;
   }
 }
 
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const GOOGLE_SCRIPT_TIMEOUT_MS = 8000;
 let googleMapsScriptPromise: Promise<void> | null = null;
 
 function loadGoogleMapsScript() {
@@ -48,36 +73,72 @@ function loadGoogleMapsScript() {
     return Promise.resolve();
   }
 
-  if (window.google?.maps?.places?.Autocomplete) {
+  if (window.google?.maps?.places?.AutocompleteService && window.google.maps.places.PlacesService) {
     return Promise.resolve();
   }
 
+  if (!googleMapsApiKey) {
+    return Promise.reject(new Error("Google Maps API key is not configured."));
+  }
+
   if (!googleMapsScriptPromise) {
-    googleMapsScriptPromise = new Promise((resolve, reject) => {
+    googleMapsScriptPromise = new Promise<void>((resolve, reject) => {
+      let didFinish = false;
+      const finish = (error?: Error) => {
+        if (didFinish) return;
+        didFinish = true;
+        window.clearTimeout(timeoutId);
+        delete window.__renttruthGoogleMapsLoaded;
+
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        if (window.google?.maps?.places?.AutocompleteService && window.google.maps.places.PlacesService) {
+          resolve();
+        } else {
+          reject(new Error("Google Places library did not initialize."));
+        }
+      };
+
+      const timeoutId = window.setTimeout(() => {
+        finish(new Error("Google Places script timed out."));
+      }, GOOGLE_SCRIPT_TIMEOUT_MS);
+
+      window.__renttruthGoogleMapsLoaded = () => finish();
+
       const existingScript = document.querySelector<HTMLScriptElement>(
         "script[data-renttruth-google-places='true']",
       );
 
       if (existingScript) {
-        existingScript.addEventListener("load", () => resolve(), { once: true });
-        existingScript.addEventListener("error", () => reject(new Error("Google Places script failed to load.")), {
+        existingScript.addEventListener("load", () => finish(), { once: true });
+        existingScript.addEventListener("error", () => finish(new Error("Google Places script failed to load.")), {
           once: true,
         });
         return;
       }
 
       const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
-        googleMapsApiKey ?? "",
-      )}&libraries=places`;
+      const params = new URLSearchParams({
+        key: googleMapsApiKey,
+        libraries: "places",
+        v: "weekly",
+        loading: "async",
+        callback: "__renttruthGoogleMapsLoaded",
+      });
+      script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
       script.async = true;
       script.defer = true;
       script.dataset.renttruthGooglePlaces = "true";
-      script.addEventListener("load", () => resolve(), { once: true });
-      script.addEventListener("error", () => reject(new Error("Google Places script failed to load.")), {
+      script.addEventListener("error", () => finish(new Error("Google Places script failed to load.")), {
         once: true,
       });
       document.head.appendChild(script);
+    }).catch((error) => {
+      googleMapsScriptPromise = null;
+      throw error;
     });
   }
 
@@ -101,14 +162,43 @@ function setFormValue(fieldName: string, value: string) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function fillAddressFields(place: GooglePlaceResult) {
+  const components = place.address_components ?? [];
+  const streetNumber = componentValue(components, "street_number");
+  const route = componentValue(components, "route");
+  const streetAddress = [streetNumber, route].filter(Boolean).join(" ").trim();
+  const city =
+    componentValue(components, "locality") ||
+    componentValue(components, "sublocality") ||
+    componentValue(components, "postal_town") ||
+    componentValue(components, "administrative_area_level_2");
+  const state = componentValue(components, "administrative_area_level_1", true);
+  const zip = componentValue(components, "postal_code").replace(/\D/g, "").slice(0, 5);
+
+  if (streetAddress) setFormValue("streetAddress", streetAddress);
+  if (city) setFormValue("city", city);
+  if (state) setFormValue("state", state);
+  if (zip) setFormValue("zip", zip);
+}
+
 export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAutocompleteProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<"idle" | "ready" | "manual">(
-    googleMapsApiKey ? "idle" : "manual",
+  const placesContainerRef = useRef<HTMLDivElement>(null);
+  const autocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
+  const placesServiceRef = useRef<GooglePlacesService | null>(null);
+  const [inputValue, setInputValue] = useState(initialValue);
+  const [predictions, setPredictions] = useState<GooglePrediction[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [status, setStatus] = useState<"loading" | "ready" | "manual" | "error">(
+    googleMapsApiKey ? "loading" : "manual",
+  );
+  const [message, setMessage] = useState(
+    googleMapsApiKey
+      ? "Loading Google address suggestions..."
+      : "Google address suggestions are not connected in this environment. Use the manual fields below.",
   );
 
   useEffect(() => {
-    if (!googleMapsApiKey || !inputRef.current) {
+    if (!googleMapsApiKey || !placesContainerRef.current) {
       setStatus("manual");
       return;
     }
@@ -117,40 +207,21 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
 
     loadGoogleMapsScript()
       .then(() => {
-        if (!isMounted || !inputRef.current || !window.google?.maps?.places?.Autocomplete) {
+        if (!isMounted || !placesContainerRef.current || !window.google?.maps?.places) {
           return;
         }
 
-        const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-          componentRestrictions: { country: "us" },
-          fields: ["address_components"],
-          types: ["address"],
-        });
-
-        autocomplete.addListener("place_changed", () => {
-          const components = autocomplete.getPlace().address_components ?? [];
-          const streetNumber = componentValue(components, "street_number");
-          const route = componentValue(components, "route");
-          const streetAddress = [streetNumber, route].filter(Boolean).join(" ").trim();
-          const city =
-            componentValue(components, "locality") ||
-            componentValue(components, "sublocality") ||
-            componentValue(components, "postal_town") ||
-            componentValue(components, "administrative_area_level_2");
-          const state = componentValue(components, "administrative_area_level_1", true);
-          const zip = componentValue(components, "postal_code").replace(/\D/g, "").slice(0, 5);
-
-          if (streetAddress) setFormValue("streetAddress", streetAddress);
-          if (city) setFormValue("city", city);
-          if (state) setFormValue("state", state);
-          if (zip) setFormValue("zip", zip);
-        });
-
+        autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
+        placesServiceRef.current = new window.google.maps.places.PlacesService(placesContainerRef.current);
         setStatus("ready");
+        setMessage("Start typing a real property address. Selecting a suggestion fills the manual fields below.");
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error("RentTruth Google Places autocomplete failed.", error);
         if (isMounted) {
-          setStatus("manual");
+          setStatus("error");
+          setPredictions([]);
+          setMessage("Google suggestions are unavailable right now. Manual address entry still works below.");
         }
       });
 
@@ -159,6 +230,102 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
     };
   }, []);
 
+  useEffect(() => {
+    if (status !== "ready" || !autocompleteServiceRef.current) {
+      setIsSearching(false);
+      setPredictions([]);
+      return;
+    }
+
+    const trimmedInput = inputValue.trim();
+
+    if (trimmedInput.length < 3) {
+      setIsSearching(false);
+      setPredictions([]);
+      return;
+    }
+
+    let isCancelled = false;
+    setIsSearching(true);
+
+    const debounceId = window.setTimeout(() => {
+      try {
+        autocompleteServiceRef.current?.getPlacePredictions(
+          {
+            input: trimmedInput,
+            componentRestrictions: { country: "us" },
+            types: ["address"],
+          },
+          (nextPredictions, nextStatus) => {
+            if (isCancelled) return;
+
+            const okStatus = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? "OK";
+            const zeroResultsStatus =
+              window.google?.maps?.places?.PlacesServiceStatus?.ZERO_RESULTS ?? "ZERO_RESULTS";
+            setIsSearching(false);
+
+            if (nextStatus === okStatus) {
+              setPredictions((nextPredictions ?? []).slice(0, 5));
+              return;
+            }
+
+            if (nextStatus === zeroResultsStatus) {
+              setPredictions([]);
+              return;
+            }
+
+            console.warn("RentTruth Google Places prediction failed.", { status: nextStatus });
+            setPredictions([]);
+            setMessage("Google suggestions paused. Keep typing or use the manual fields below.");
+          },
+        );
+      } catch (error) {
+        if (isCancelled) return;
+        console.error("RentTruth Google Places prediction crashed.", error);
+        setIsSearching(false);
+        setPredictions([]);
+        setStatus("error");
+        setMessage("Google suggestions are unavailable right now. Manual address entry still works below.");
+      }
+    }, 250);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(debounceId);
+    };
+  }, [inputValue, status]);
+
+  function selectPrediction(prediction: GooglePrediction) {
+    setInputValue(prediction.description);
+    setPredictions([]);
+
+    try {
+      placesServiceRef.current?.getDetails(
+        {
+          placeId: prediction.place_id,
+          fields: ["address_components"],
+        },
+        (place, detailStatus) => {
+          const okStatus = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? "OK";
+
+          if (detailStatus === okStatus && place) {
+            fillAddressFields(place);
+            setMessage("Address selected. Review the populated fields below before saving.");
+            return;
+          }
+
+          console.warn("RentTruth Google Places detail lookup failed.", { status: detailStatus });
+          setMessage("We could not fill that address automatically. Use the manual fields below.");
+        },
+      );
+    } catch (error) {
+      console.error("RentTruth Google Places detail lookup crashed.", error);
+      setMessage("We could not fill that address automatically. Use the manual fields below.");
+    }
+  }
+
+  const isLive = status === "ready";
+
   return (
     <div className="rounded-[28px] border border-emerald-100 bg-emerald-50/70 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -166,28 +333,53 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
             Address autocomplete
           </p>
-          <p className="mt-2 text-sm leading-6 text-emerald-900/75">
-            {status === "ready"
-              ? "Start typing a real property address. Selecting a suggestion fills the manual fields below."
-              : "Google address suggestions are not connected in this environment. Use the manual fields below."}
-          </p>
+          <p className="mt-2 text-sm leading-6 text-emerald-900/75">{message}</p>
         </div>
         <span className="rounded-full border border-white/70 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-800">
-          {status === "ready" ? "Live suggestions" : "Manual fallback"}
+          {isLive ? "Live suggestions" : "Manual fallback"}
         </span>
       </div>
 
-      <label className="mt-4 block">
+      <label className="relative mt-4 block">
         <span className="mb-2 block text-sm font-semibold text-slate-700">Search property address</span>
         <input
-          ref={inputRef}
           type="text"
-          defaultValue={initialValue}
-          disabled={status === "manual"}
-          placeholder={status === "ready" ? "Start typing an address" : "Manual entry is active below"}
-          className="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-white/70 disabled:text-slate-500 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+          value={inputValue}
+          onChange={(event) => setInputValue(event.target.value)}
+          placeholder={isLive ? "Start typing an address" : "Manual entry remains available below"}
+          autoComplete="off"
+          inputMode="search"
+          className="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
         />
+
+        {isLive && (predictions.length > 0 || isSearching) ? (
+          <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-[22px] border border-emerald-100 bg-white p-2 shadow-2xl shadow-slate-900/15">
+            {isSearching ? (
+              <div className="px-3 py-3 text-sm text-slate-500">Searching addresses...</div>
+            ) : null}
+
+            {predictions.map((prediction) => (
+              <button
+                key={prediction.place_id}
+                type="button"
+                onClick={() => selectPrediction(prediction)}
+                className="block w-full rounded-2xl px-3 py-3 text-left transition hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
+              >
+                <span className="block break-words text-sm font-semibold text-slate-900">
+                  {prediction.structured_formatting?.main_text ?? prediction.description}
+                </span>
+                {prediction.structured_formatting?.secondary_text ? (
+                  <span className="mt-1 block break-words text-xs leading-5 text-slate-500">
+                    {prediction.structured_formatting.secondary_text}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </label>
+
+      <div ref={placesContainerRef} className="hidden" />
     </div>
   );
 }
