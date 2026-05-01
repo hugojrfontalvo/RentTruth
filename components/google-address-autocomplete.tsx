@@ -56,6 +56,9 @@ declare global {
           PlacesServiceStatus?: {
             OK?: string;
             ZERO_RESULTS?: string;
+            REQUEST_DENIED?: string;
+            OVER_QUERY_LIMIT?: string;
+            INVALID_REQUEST?: string;
           };
         };
       };
@@ -66,6 +69,7 @@ declare global {
 
 const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 const GOOGLE_SCRIPT_TIMEOUT_MS = 8000;
+const GOOGLE_PREDICTION_TIMEOUT_MS = 5000;
 let googleMapsScriptPromise: Promise<void> | null = null;
 
 function loadGoogleMapsScript() {
@@ -74,6 +78,7 @@ function loadGoogleMapsScript() {
   }
 
   if (window.google?.maps?.places?.AutocompleteService && window.google.maps.places.PlacesService) {
+    console.log("RentTruth Google script already loaded; Places library available.");
     return Promise.resolve();
   }
 
@@ -96,6 +101,7 @@ function loadGoogleMapsScript() {
         }
 
         if (window.google?.maps?.places?.AutocompleteService && window.google.maps.places.PlacesService) {
+          console.log("RentTruth Google script loaded; Places library available.");
           resolve();
         } else {
           reject(new Error("Google Places library did not initialize."));
@@ -181,6 +187,21 @@ function fillAddressFields(place: GooglePlaceResult) {
   if (zip) setFormValue("zip", zip);
 }
 
+function getPredictionStatusMessage(status: string) {
+  switch (status) {
+    case "ZERO_RESULTS":
+      return "No suggestions found. Continue with manual address.";
+    case "REQUEST_DENIED":
+      return "Google suggestions are not authorized for this site. Continue with manual address.";
+    case "OVER_QUERY_LIMIT":
+      return "Google suggestions are temporarily rate limited. Continue with manual address.";
+    case "INVALID_REQUEST":
+      return "Google could not search that address yet. Continue with manual address.";
+    default:
+      return "No suggestions found. Continue with manual address.";
+  }
+}
+
 export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAutocompleteProps) {
   const placesContainerRef = useRef<HTMLDivElement>(null);
   const autocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
@@ -213,6 +234,7 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
 
         autocompleteServiceRef.current = new window.google.maps.places.AutocompleteService();
         placesServiceRef.current = new window.google.maps.places.PlacesService(placesContainerRef.current);
+        console.log("RentTruth Google Places services initialized.");
         setStatus("ready");
         setMessage("Start typing a real property address. Selecting a suggestion fills the manual fields below.");
       })
@@ -249,38 +271,58 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
     setIsSearching(true);
 
     const debounceId = window.setTimeout(() => {
+      let didRespond = false;
+      const requestInput = trimmedInput;
+      const predictionTimeoutId = window.setTimeout(() => {
+        if (isCancelled || didRespond) return;
+
+        didRespond = true;
+        setIsSearching(false);
+        setPredictions([]);
+        setMessage("No suggestions found. Continue with manual address.");
+        console.warn("RentTruth Google Places prediction timed out.", { input: requestInput });
+      }, GOOGLE_PREDICTION_TIMEOUT_MS);
+
       try {
+        console.log("RentTruth Google Places prediction request started.", { input: requestInput });
         autocompleteServiceRef.current?.getPlacePredictions(
           {
-            input: trimmedInput,
+            input: requestInput,
             componentRestrictions: { country: "us" },
-            types: ["address"],
           },
           (nextPredictions, nextStatus) => {
-            if (isCancelled) return;
+            if (isCancelled || didRespond) return;
 
+            didRespond = true;
+            window.clearTimeout(predictionTimeoutId);
             const okStatus = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? "OK";
-            const zeroResultsStatus =
-              window.google?.maps?.places?.PlacesServiceStatus?.ZERO_RESULTS ?? "ZERO_RESULTS";
+            console.log("RentTruth Google Places prediction response.", {
+              input: requestInput,
+              status: nextStatus,
+              count: nextPredictions?.length ?? 0,
+            });
             setIsSearching(false);
 
             if (nextStatus === okStatus) {
-              setPredictions((nextPredictions ?? []).slice(0, 5));
-              return;
-            }
-
-            if (nextStatus === zeroResultsStatus) {
-              setPredictions([]);
+              const limitedPredictions = (nextPredictions ?? []).slice(0, 5);
+              setPredictions(limitedPredictions);
+              if (limitedPredictions.length === 0) {
+                setMessage("No suggestions found. Continue with manual address.");
+              } else {
+                setMessage("Select a suggestion to fill the manual fields below.");
+              }
               return;
             }
 
             console.warn("RentTruth Google Places prediction failed.", { status: nextStatus });
             setPredictions([]);
-            setMessage("Google suggestions paused. Keep typing or use the manual fields below.");
+            setMessage(getPredictionStatusMessage(nextStatus));
           },
         );
       } catch (error) {
         if (isCancelled) return;
+        didRespond = true;
+        window.clearTimeout(predictionTimeoutId);
         console.error("RentTruth Google Places prediction crashed.", error);
         setIsSearching(false);
         setPredictions([]);
