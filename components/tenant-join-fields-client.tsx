@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { JoinableProperty, SavedTenantAddress } from "@/components/tenant-join-types";
+import { GoogleAddressAutocomplete } from "@/components/google-address-autocomplete";
+import type { SavedTenantAddress } from "@/components/tenant-join-types";
 
 type TenantJoinFieldsClientProps = {
   initialSavedAddress?: SavedTenantAddress | null;
-  properties: JoinableProperty[];
 };
 
 const tenantPropertyTypes: SavedTenantAddress["propertyType"][] = [
@@ -28,23 +28,8 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getPropertyLabel(property: JoinableProperty) {
-  const streetAddress = normalizeText(property.streetAddress);
-  const city = normalizeText(property.city);
-  const state = normalizeText(property.state).toUpperCase();
-  const zip = normalizeZip(property.zip);
-
-  return [streetAddress, city, [state, zip].filter(Boolean).join(" ")]
-    .filter(Boolean)
-    .join(", ");
-}
-
-function propertyTypeRequiresUnit(propertyType: JoinableProperty["propertyType"] | SavedTenantAddress["propertyType"]) {
+function propertyTypeRequiresUnit(propertyType: SavedTenantAddress["propertyType"]) {
   return normalizePropertyType(propertyType) !== "House";
-}
-
-function normalizeAddress(value: unknown) {
-  return normalizeText(value).replace(/\s+/g, " ").toLowerCase();
 }
 
 function normalizeZip(value: unknown) {
@@ -121,68 +106,21 @@ function getSafeSavedAddress(address?: SavedTenantAddress | null): SavedTenantAd
   };
 }
 
-function getSafeProperties(properties?: JoinableProperty[] | null): JoinableProperty[] {
-  if (!Array.isArray(properties)) {
-    return [];
-  }
-
-  return properties.reduce<JoinableProperty[]>((safeProperties, property) => {
-      const id = normalizeText(property.id);
-      const streetAddress = normalizeText(property.streetAddress);
-      const city = normalizeText(property.city);
-      const state = normalizeText(property.state).toUpperCase();
-      const zip = normalizeZip(property.zip);
-      const propertyType = normalizePropertyType(property.propertyType);
-
-      if (!id || !streetAddress || !city || !state || !zip) {
-        return safeProperties;
-      }
-
-      safeProperties.push({
-        id,
-        streetAddress,
-        city,
-        state,
-        zip,
-        propertyType,
-        unitNumber: propertyTypeRequiresUnit(propertyType)
-          ? normalizeText(property.unitNumber).toUpperCase() || undefined
-          : undefined,
-        name: normalizeText(property.name) || undefined,
-      });
-
-      return safeProperties;
-    }, []);
-}
-
 export function TenantJoinFieldsClient({
   initialSavedAddress,
-  properties,
 }: TenantJoinFieldsClientProps) {
   const savedAddress = getSafeSavedAddress(initialSavedAddress);
-  const safeProperties = getSafeProperties(properties);
   const defaultPropertyType = savedAddress?.propertyType ?? "Apartment";
   const [selectedPropertyType, setSelectedPropertyType] = useState<
     SavedTenantAddress["propertyType"]
   >(defaultPropertyType);
   const savedAddressLabel = savedAddress ? formatAddress(savedAddress) : "";
-  const matchedSavedProperty = savedAddress
-    ? safeProperties.find(
-        (property) =>
-          normalizeAddress(property.streetAddress) === normalizeAddress(savedAddress.streetAddress) &&
-          (!property.unitNumber ||
-            !savedAddress.unitNumber ||
-            normalizeAddress(property.unitNumber) === normalizeAddress(savedAddress.unitNumber)) &&
-          normalizeAddress(property.city) === normalizeAddress(savedAddress.city) &&
-          normalizeAddress(property.state) === normalizeAddress(savedAddress.state) &&
-          normalizeZip(property.zip) === normalizeZip(savedAddress.zip),
-      ) ?? null
-    : null;
-  const effectivePropertyType = matchedSavedProperty?.propertyType ?? selectedPropertyType;
+  const effectivePropertyType = savedAddress?.propertyType ?? selectedPropertyType;
+  const helperValue = savedAddress
+    ? `${savedAddress.streetAddress}, ${savedAddress.city}, ${savedAddress.state} ${savedAddress.zip}`
+    : "";
   const savedAddressStatus = savedAddress
-    ? matchedSavedProperty
-      ? "Ready for verification"
-      : "Waiting for landlord property match"
+    ? "Ready for code verification"
     : "Address required";
 
   return (
@@ -194,12 +132,11 @@ export function TenantJoinFieldsClient({
               Step 1
             </p>
             <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
-              Save your address
+              Add Your Rental Address
             </h3>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
-              Save your structured rental address first. RentTruth keeps this as your working
-              address record, so later code verification happens against the saved record instead of
-              making you re-enter everything.
+              Choose the residence type first, then use address suggestions or the manual fallback
+              fields. Your landlord join code is entered after this address is saved.
             </p>
           </div>
           <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600">
@@ -216,9 +153,7 @@ export function TenantJoinFieldsClient({
                 </p>
                 <p className="mt-2 font-medium text-emerald-950">{savedAddressLabel}</p>
                 <p className="mt-1 text-sm text-emerald-800">
-                  {matchedSavedProperty
-                    ? `Matched property found: ${matchedSavedProperty.name?.trim() || matchedSavedProperty.propertyType}`
-                    : "We’re still waiting for a landlord-created property that matches this saved address."}
+                  This address is saved. Enter the landlord join code below when you have it.
                 </p>
               </div>
               <div className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-800">
@@ -251,9 +186,7 @@ export function TenantJoinFieldsClient({
                   Next step
                 </p>
                 <p className="mt-2 text-sm leading-6 text-slate-700">
-                  {matchedSavedProperty
-                    ? "Use Add Join Code to verify this saved address with the landlord-provided code."
-                    : "Keep this address saved. When the landlord creates the property and shares a code, come back and add only the code here."}
+                  When the landlord shares a code, come back and add only the code here.
                 </p>
               </div>
             </div>
@@ -275,8 +208,44 @@ export function TenantJoinFieldsClient({
           </div>
         ) : null}
 
-        <div className="rounded-[22px] border border-slate-200 bg-white p-4 sm:rounded-[24px]">
-          <div className="grid gap-5 md:grid-cols-[0.62fr_0.38fr]">
+        <div id="edit-address" className="rounded-[22px] border border-slate-200 bg-white p-4 sm:rounded-[24px]">
+          <div className="grid gap-3">
+            <span className="text-sm font-semibold text-slate-700">Property type / unit info</span>
+            <div className="grid grid-cols-2 gap-3">
+              {tenantPropertyTypes.map((propertyType) => (
+                <label
+                  key={propertyType}
+                  className={`block cursor-pointer ${getTenantPropertyTypeGridClass(propertyType)}`}
+                >
+                  <input
+                    type="radio"
+                    name="savedPropertyType"
+                    value={propertyType}
+                    checked={selectedPropertyType === propertyType}
+                    onChange={() => setSelectedPropertyType(propertyType)}
+                    className="peer sr-only"
+                  />
+                  <div className={`min-h-[88px] rounded-[22px] border p-3.5 text-slate-700 transition peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white peer-checked:shadow-lg peer-checked:shadow-slate-200/70 peer-checked:[&_p:last-child]:text-white/70 sm:rounded-[24px] sm:p-4 ${getTenantPropertyTypeCardClass(propertyType)}`}>
+                    <p className="font-display text-base font-semibold sm:text-lg">{propertyType}</p>
+                    <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm">
+                      {getTenantPropertyTypeLabel(propertyType)}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <p className="text-sm leading-6 text-slate-500">
+              {propertyTypeRequiresUnit(selectedPropertyType)
+                ? "Unit number is required for this property type."
+                : "House selected. No apartment or unit number is required."}
+            </p>
+          </div>
+
+          <div className="mt-5">
+            <GoogleAddressAutocomplete initialValue={helperValue} />
+          </div>
+
+          <div className="mt-5 grid gap-5 md:grid-cols-[0.62fr_0.38fr]">
             <label className="block md:col-span-2">
               <span className="mb-2 block text-sm font-semibold text-slate-700">Street address</span>
               <input
@@ -354,34 +323,6 @@ export function TenantJoinFieldsClient({
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            {tenantPropertyTypes.map((propertyType) => (
-              <label
-                key={propertyType}
-                className={`block cursor-pointer ${getTenantPropertyTypeGridClass(propertyType)}`}
-              >
-                <input
-                  type="radio"
-                  name="savedPropertyType"
-                  value={propertyType}
-                  checked={selectedPropertyType === propertyType}
-                  onChange={() => setSelectedPropertyType(propertyType)}
-                  className="peer sr-only"
-                />
-                <div className={`min-h-[88px] rounded-[22px] border p-3.5 text-slate-700 transition peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white peer-checked:shadow-lg peer-checked:shadow-slate-200/70 peer-checked:[&_p:last-child]:text-white/70 sm:rounded-[24px] sm:p-4 ${getTenantPropertyTypeCardClass(propertyType)}`}>
-                  <p className="font-display text-base font-semibold sm:text-lg">{propertyType}</p>
-                  <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm">
-                    {getTenantPropertyTypeLabel(propertyType)}
-                  </p>
-                </div>
-              </label>
-            ))}
-          </div>
-
-          <p className="mt-3 text-sm leading-6 text-slate-500">
-            Select House to remove the unit requirement, or choose a unit-based property type to require it.
-          </p>
-
           <div className="mt-5 grid gap-3 sm:flex sm:items-center sm:justify-between">
             <p className="max-w-2xl text-sm leading-7 text-slate-500">
               Save these address fields once. You can also correct the residence type here if you
@@ -398,39 +339,6 @@ export function TenantJoinFieldsClient({
           </div>
         </div>
 
-        {safeProperties.length > 0 ? (
-          <div className="rounded-[24px] border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-medium text-slate-600">
-                Current landlord-created property helpers
-              </p>
-              <div className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-medium text-sky-800">
-                Helper list only. Your saved address remains the source of truth.
-              </div>
-            </div>
-
-            <div className="mt-4 grid gap-2">
-              {safeProperties.slice(0, 6).map((property) => (
-                <div
-                  key={property.id}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-slate-800">{getPropertyLabel(property)}</p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-400">
-                        {property.name?.trim() || property.propertyType}
-                      </p>
-                    </div>
-                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
-                      {property.propertyType}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div
@@ -458,14 +366,12 @@ export function TenantJoinFieldsClient({
             }`}
           >
             {savedAddress
-              ? matchedSavedProperty
-                ? "Ready for code verification"
-                : "Waiting for landlord property match"
+              ? "Ready for code verification"
               : "Complete step 1 first"}
           </div>
         </div>
 
-        <input type="hidden" name="propertyId" value={matchedSavedProperty?.id ?? ""} />
+        <input type="hidden" name="propertyId" value="" />
 
         <div className="mt-5 grid gap-5 md:grid-cols-[0.64fr_0.36fr]">
           <label className="block">

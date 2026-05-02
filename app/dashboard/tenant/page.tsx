@@ -23,7 +23,6 @@ import {
   getSavedTenantAddress,
   getPropertyDisplayName,
   getPropertyServiceAddress,
-  getTenantJoinableProperties,
   getTicketsForTenant,
   propertyTypeRequiresUnit,
 } from "@/lib/demo-data";
@@ -302,9 +301,6 @@ export default async function TenantDashboardPage({
   const ticketsData = tenantId ? getTicketsForTenant(tenantId) : [];
   const tickets = Array.isArray(ticketsData) ? ticketsData : [];
   console.log("tenant tickets loaded", { count: tickets.length });
-  const joinablePropertiesData = getTenantJoinableProperties();
-  const joinableProperties = Array.isArray(joinablePropertiesData) ? joinablePropertiesData : [];
-  console.log("tenant joinable properties loaded", { count: joinableProperties.length });
   const activeTickets = tickets.filter(isActiveTicket);
   const tenantConfirmationTickets = tickets.filter(
     (ticket) => ticket.status === "Waiting for tenant confirmation",
@@ -582,7 +578,6 @@ export default async function TenantDashboardPage({
                   <TenantJoinForm
                     initialSavedAddress={savedAddressRecord}
                     requestTenantPropertyJoinAction={requestTenantPropertyJoinAction}
-                    properties={joinableProperties}
                   />
                 </>
               ) : isApproved ? (

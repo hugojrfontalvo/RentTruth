@@ -55,6 +55,18 @@ export function LandlordPropertyForm({
       {initialValues?.id ? (
         <input type="hidden" name="propertyId" value={initialValues.id} />
       ) : null}
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
+          Create Property Address
+        </p>
+        <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">
+          Property type and address
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">
+          Choose the property type first, then use Google address suggestions or the manual fields below.
+        </p>
+      </div>
+
       <label className="block">
         <span className="mb-2 block text-sm font-semibold text-slate-700">Building or property name</span>
         <input
@@ -71,6 +83,42 @@ export function LandlordPropertyForm({
           {errorMessage}
         </div>
       ) : null}
+
+      <div className="grid gap-3">
+        <span className="text-sm font-semibold text-slate-700">Property type / unit info</span>
+        <div className="grid grid-cols-2 gap-3">
+          {propertyTypes.map((type) => (
+            <label
+              key={type}
+              className={`block cursor-pointer ${getPropertyTypeGridClass(type)}`}
+            >
+              <input
+                type="radio"
+                name="propertyType"
+                value={type}
+                checked={selectedPropertyType === type}
+                onChange={() => setSelectedPropertyType(type)}
+                className="peer sr-only"
+              />
+              <div className={`min-h-[88px] rounded-[22px] border p-3.5 text-slate-700 transition peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white peer-checked:shadow-lg peer-checked:shadow-slate-200/70 peer-checked:[&_p:last-child]:text-white/70 sm:rounded-[24px] sm:p-4 ${getPropertyTypeCardClass(type)}`}>
+                <p className="font-display text-base font-semibold sm:text-lg">{type}</p>
+                <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm">
+                  {type === "House"
+                    ? "Single residence"
+                    : type === "Multi-unit building"
+                      ? "Building"
+                      : "Unit-based"}
+                </p>
+              </div>
+            </label>
+          ))}
+        </div>
+        <p className="text-sm leading-6 text-slate-500">
+          {selectedPropertyType === "House"
+            ? "House selected. No apartment or unit number is required."
+            : "Unit number can be added here if you manage a specific unit. Tenants still provide their exact unit during approval."}
+        </p>
+      </div>
 
       <GoogleAddressAutocomplete initialValue={helperValue} />
 
@@ -149,40 +197,6 @@ export function LandlordPropertyForm({
             ZIP+4 is okay. RentTruth saves the first 5 digits.
           </span>
         </label>
-      </div>
-
-      <div className="grid gap-3">
-        <span className="text-sm font-semibold text-slate-700">Property type</span>
-        <div className="grid grid-cols-2 gap-3">
-          {propertyTypes.map((type) => (
-            <label
-              key={type}
-              className={`block cursor-pointer ${getPropertyTypeGridClass(type)}`}
-            >
-              <input
-                type="radio"
-                name="propertyType"
-                value={type}
-                checked={selectedPropertyType === type}
-                onChange={() => setSelectedPropertyType(type)}
-                className="peer sr-only"
-              />
-              <div className={`min-h-[88px] rounded-[22px] border p-3.5 text-slate-700 transition peer-checked:border-ink peer-checked:bg-ink peer-checked:text-white peer-checked:shadow-lg peer-checked:shadow-slate-200/70 peer-checked:[&_p:last-child]:text-white/70 sm:rounded-[24px] sm:p-4 ${getPropertyTypeCardClass(type)}`}>
-                <p className="font-display text-base font-semibold sm:text-lg">{type}</p>
-                <p className="mt-1.5 text-xs leading-5 text-slate-500 sm:mt-2 sm:text-sm">
-                  {type === "House"
-                    ? "Single residence"
-                    : type === "Multi-unit building"
-                      ? "Building"
-                      : "Unit-based"}
-                </p>
-              </div>
-            </label>
-          ))}
-        </div>
-        <p className="text-sm leading-6 text-slate-500">
-          House is treated as a single residence. Unit-based properties can include a unit here, but tenants still provide their exact unit during approval.
-        </p>
       </div>
 
       <div className="rounded-[24px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-7 text-sky-800">
