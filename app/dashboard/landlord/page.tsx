@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession, logoutAction } from "@/app/actions/auth";
 import {
   createPropertyAction,
+  deletePropertyAction,
   landlordCloseTicketAction,
   updatePropertyAction,
 } from "@/app/actions/landlord";
@@ -65,6 +66,8 @@ type LandlordDashboardPageProps = {
     edit?: string;
     repair?: string;
     review?: string;
+    deleted?: string;
+    deleteError?: string;
   }>;
 };
 
@@ -190,6 +193,18 @@ function getPropertyUpdateMessage(updated?: string, code?: string) {
   return null;
 }
 
+function getPropertyDeleteErrorMessage(error?: string) {
+  if (error === "has-linked-records") {
+    return "This property has tenants or repair tickets, so it cannot be deleted safely yet.";
+  }
+
+  if (error === "not-found") {
+    return "We couldn’t find that property, or it does not belong to this landlord account.";
+  }
+
+  return null;
+}
+
 function formatStatusTimestamp(value?: string) {
   if (!value) {
     return null;
@@ -292,6 +307,7 @@ export default async function LandlordDashboardPage({
   const vendorActionMessage = getVendorActionMessage(params.vendor);
   const repairActionMessage = getRepairActionMessage(params.repair, params.review);
   const propertyUpdateMessage = getPropertyUpdateMessage(params.updated, params.code);
+  const propertyDeleteError = getPropertyDeleteErrorMessage(params.deleteError);
   const propertyGroups = properties.map((property) => {
     const ticketsData = getTicketsForProperty(property.id);
     const pendingTenantsData = getPendingTenantsForProperty(property.id);
@@ -542,6 +558,18 @@ export default async function LandlordDashboardPage({
             <div className="mt-6 rounded-[28px] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-800 shadow-sm">
               Property created successfully: {getPropertyDisplayName(createdProperty)}. Join code{" "}
               <span className="font-semibold">{createdProperty.joinCode}</span> is ready to share, and the new property card is highlighted below.
+            </div>
+          ) : null}
+
+          {params.deleted === "1" ? (
+            <div className="mt-6 rounded-[28px] border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-medium text-emerald-800 shadow-sm">
+              Property removed successfully.
+            </div>
+          ) : null}
+
+          {propertyDeleteError ? (
+            <div className="mt-6 rounded-[28px] border border-rose-200 bg-rose-50 px-5 py-4 text-sm font-medium text-rose-700 shadow-sm">
+              {propertyDeleteError}
             </div>
           ) : null}
 
@@ -1464,6 +1492,28 @@ export default async function LandlordDashboardPage({
                         </button>
                       </form>
                     </div>
+
+                    <details className="mt-3 rounded-[24px] border border-rose-200 bg-rose-50 p-4">
+                      <summary className="cursor-pointer list-none rounded-full border border-rose-200 bg-white px-4 py-3 text-center text-sm font-semibold text-rose-700 transition hover:-translate-y-0.5 hover:border-rose-300 hover:bg-rose-50">
+                        Remove Property
+                      </summary>
+                      <div className="mt-4 text-sm leading-6 text-rose-800">
+                        <p>
+                          This only works for properties with no linked tenants and no repair tickets.
+                          If this property has activity, RentTruth will block deletion to protect the
+                          repair history.
+                        </p>
+                        <form action={deletePropertyAction} className="mt-4">
+                          <input type="hidden" name="propertyId" value={group.property.id} />
+                          <button
+                            type="submit"
+                            className="w-full rounded-full bg-rose-700 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-rose-800 sm:w-auto"
+                          >
+                            Confirm Remove Property
+                          </button>
+                        </form>
+                      </div>
+                    </details>
                   </article>
                 ))}
 

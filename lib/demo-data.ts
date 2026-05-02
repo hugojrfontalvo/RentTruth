@@ -3083,6 +3083,37 @@ export function updatePropertyForLandlord(input: {
   return property;
 }
 
+export function deletePropertyForLandlord(input: {
+  landlordId: string;
+  propertyId: string;
+}): "deleted" | "not-found" | "has-linked-records" {
+  const propertyIndex = properties.findIndex((property) => property.id === input.propertyId);
+  const property = propertyIndex >= 0 ? properties[propertyIndex] : null;
+
+  if (!property || property.landlordId !== input.landlordId) {
+    return "not-found";
+  }
+
+  const hasTenants = users.some((user) => user.role === "tenant" && user.propertyId === property.id);
+  const hasTickets = tickets.some((ticket) => ticket.propertyId === property.id);
+
+  if (hasTenants || hasTickets) {
+    return "has-linked-records";
+  }
+
+  properties.splice(propertyIndex, 1);
+  recordActivity({
+    type: "property_deleted",
+    actorUserId: input.landlordId,
+    actorRole: "landlord",
+    entityType: "property",
+    entityId: property.id,
+    message: `Property removed: ${getPropertyFullAddress(property)}.`,
+  });
+  persistStore();
+  return "deleted";
+}
+
 export function resetPropertyJoinCode(propertyId: string) {
   const property = findPropertyById(propertyId);
 

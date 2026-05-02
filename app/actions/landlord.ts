@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
 import {
   createPropertyForLandlord,
+  deletePropertyForLandlord,
   flushPersistentStore,
   isValidNormalizedZip,
   isPropertyType,
@@ -129,6 +130,36 @@ export async function updatePropertyAction(formData: FormData) {
   await flushPersistentStore();
 
   redirect(`/dashboard/landlord?updated=1&property=${property.id}&code=preserved`);
+}
+
+export async function deletePropertyAction(formData: FormData) {
+  const session = await getSession();
+
+  if (!session || session.role !== "landlord") {
+    redirect("/login");
+  }
+
+  const propertyId = String(formData.get("propertyId") ?? "").trim();
+
+  if (!propertyId) {
+    redirect("/dashboard/landlord?deleteError=not-found");
+  }
+
+  const result = deletePropertyForLandlord({
+    landlordId: session.id,
+    propertyId,
+  });
+
+  if (result === "deleted") {
+    await flushPersistentStore();
+    redirect("/dashboard/landlord?deleted=1");
+  }
+
+  if (result === "has-linked-records") {
+    redirect(`/dashboard/landlord?deleteError=has-linked-records&property=${propertyId}`);
+  }
+
+  redirect("/dashboard/landlord?deleteError=not-found");
 }
 
 export async function landlordCloseTicketAction(formData: FormData) {
