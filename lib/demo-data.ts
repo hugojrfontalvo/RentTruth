@@ -2970,6 +2970,21 @@ export function normalizeUnitBuildingText(value?: string) {
     .trim();
 }
 
+function normalizeStreetAddressForMatch(value?: string) {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/\b(avenue)\b/g, "ave")
+    .replace(/\b(street)\b/g, "st")
+    .replace(/\b(road)\b/g, "rd")
+    .replace(/\b(drive)\b/g, "dr")
+    .replace(/\b(court)\b/g, "ct")
+    .replace(/\b(place)\b/g, "pl")
+    .replace(/\b(lane)\b/g, "ln")
+    .replace(/\b(boulevard)\b/g, "blvd")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
 export function getNormalizedResidenceKey(input: { unitNumber?: string; buildingNumber?: string }) {
   return normalizeUnitBuildingText(
     [input.unitNumber, input.buildingNumber ? `building ${input.buildingNumber}` : ""]
@@ -2983,7 +2998,8 @@ function baseAddressMatches(
   input: Pick<SavedTenantAddress, "streetAddress" | "city" | "state" | "zip">,
 ) {
   return (
-    property.streetAddress.trim().toLowerCase() === input.streetAddress.trim().toLowerCase() &&
+    normalizeStreetAddressForMatch(property.streetAddress) ===
+      normalizeStreetAddressForMatch(input.streetAddress) &&
     property.city.trim().toLowerCase() === input.city.trim().toLowerCase() &&
     property.state.trim().toLowerCase() === input.state.trim().toLowerCase() &&
     normalizeZipCode(property.zip) === normalizeZipCode(input.zip)

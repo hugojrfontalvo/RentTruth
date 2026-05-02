@@ -10,6 +10,7 @@ import {
   findUserById,
   flushPersistentStore,
   formatTenantAddress,
+  getPropertyFullAddress,
   isValidNormalizedZip,
   isClosePropertyAddressMatch,
   normalizeZipCode,
@@ -200,6 +201,7 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
   const selectedPropertyByAddress =
     (propertyId ? findPropertyById(propertyId) : null) ??
     (currentAddress ? findPropertyBySavedAddress(currentAddress) : null);
+  console.log("join code lookup started", { joinCode, intent });
   const propertyFromJoinCode = joinCode ? findPropertyByJoinCode(joinCode) : null;
 
   if (!currentAddress) {
@@ -214,6 +216,11 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
     redirect("/dashboard/tenant?joinError=invalid-join-code");
   }
 
+  console.log("join code valid", {
+    joinCode,
+    propertyId: propertyFromJoinCode.id,
+  });
+
   const requestedUnitNumber = unitNumber || currentAddress.unitNumber || "";
   const requestedBuildingNumber = buildingNumber || currentAddress.buildingNumber || "";
   const joinCodeAddressMatches = propertyAddressMatchesSavedAddress(propertyFromJoinCode, {
@@ -223,7 +230,16 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
   });
 
   if (intent === "use-landlord-address") {
-    if (!isClosePropertyAddressMatch(propertyFromJoinCode, currentAddress)) {
+    console.log("tenant accepted landlord suggested address", {
+      joinCode,
+      propertyId: propertyFromJoinCode.id,
+    });
+
+    const canUseSuggestedAddress =
+      isClosePropertyAddressMatch(propertyFromJoinCode, currentAddress) ||
+      formatTenantAddress(currentAddress) !== getPropertyFullAddress(propertyFromJoinCode);
+
+    if (!canUseSuggestedAddress) {
       redirect(`/dashboard/tenant?joinError=join-code-address-mismatch&joinCode=${joinCode}`);
     }
 
@@ -249,9 +265,16 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
   if (!selectedPropertyByAddress || propertyFromJoinCode.id !== selectedPropertyByAddress.id) {
     if (!joinCodeAddressMatches) {
       const isCloseMatch = isClosePropertyAddressMatch(propertyFromJoinCode, currentAddress);
+      console.log("address mismatch", {
+        joinCode,
+        propertyId: propertyFromJoinCode.id,
+        isCloseMatch,
+        landlordAddress: getPropertyFullAddress(propertyFromJoinCode),
+        tenantAddress: formatTenantAddress(currentAddress),
+      });
       redirect(
         `/dashboard/tenant?joinError=${
-          isCloseMatch ? "close-address-mismatch" : "join-code-address-mismatch"
+          isCloseMatch ? "close-address-mismatch" : "suggest-landlord-address"
         }&joinCode=${joinCode}`,
       );
     }
@@ -266,6 +289,13 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
     requestedUnitNumber &&
     !joinCodeAddressMatches
   ) {
+    console.log("address mismatch", {
+      joinCode,
+      propertyId: propertyFromJoinCode.id,
+      isCloseMatch: true,
+      landlordAddress: getPropertyFullAddress(propertyFromJoinCode),
+      tenantAddress: formatTenantAddress(currentAddress),
+    });
     redirect(`/dashboard/tenant?joinError=close-address-mismatch&joinCode=${joinCode}`);
   }
 
