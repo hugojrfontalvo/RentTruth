@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
 import {
+  addTenantTicketMessage,
   createRepairTicketAttachment,
   createTicketForTenant,
   findPropertyById,
@@ -173,4 +174,19 @@ export async function tenantReportRepairStillBrokenAction(formData: FormData) {
   await flushPersistentStore();
 
   redirect("/dashboard/tenant?repair=follow-up");
+}
+
+export async function tenantSendTicketMessageAction(formData: FormData) {
+  const session = await requireApprovedTenantSession();
+  const ticketId = String(formData.get("ticketId") ?? "").trim();
+  const messageText = String(formData.get("message") ?? "").trim();
+
+  addTenantTicketMessage({
+    ticketId,
+    tenantUserId: session.id,
+    messageText,
+  });
+  await flushPersistentStore();
+
+  redirect("/dashboard/tenant?message=sent#ticket-history");
 }

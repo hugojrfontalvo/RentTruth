@@ -115,6 +115,16 @@ export type RepairTicket = {
   landlordFinalReviewNotes?: string;
   repairApprovalRequest?: RepairApprovalRequest | null;
   vendorRequests?: VendorTicketRequest[];
+  messages?: TicketMessage[];
+};
+
+export type TicketMessage = {
+  id: string;
+  ticketId: string;
+  senderUserId: string;
+  senderRole: "tenant" | "landlord";
+  text: string;
+  createdAt: string;
 };
 
 export type RepairApprovalRequestStatus =
@@ -1257,6 +1267,7 @@ function cloneTicket(ticket: RepairTicket): RepairTicket {
       ? { ...ticket.repairApprovalRequest }
       : ticket.repairApprovalRequest,
     vendorRequests: ticket.vendorRequests?.map((request) => ({ ...request })),
+    messages: ticket.messages?.map((message) => ({ ...message })),
   };
 }
 
@@ -3223,6 +3234,67 @@ export function getPropertyTrustSignal(property: Property) {
 
 export function findTicketById(ticketId: string) {
   return tickets.find((ticket) => ticket.id === ticketId) ?? null;
+}
+
+export function getTicketMessages(ticketId: string) {
+  const ticket = findTicketById(ticketId);
+
+  return (ticket?.messages ?? [])
+    .slice()
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+export function addTenantTicketMessage(input: {
+  ticketId: string;
+  tenantUserId: string;
+  messageText: string;
+}) {
+  const ticket = findTicketById(input.ticketId);
+  const text = input.messageText.trim();
+
+  if (!ticket || ticket.tenantUserId !== input.tenantUserId || !text) {
+    return null;
+  }
+
+  const message: TicketMessage = {
+    id: randomUUID(),
+    ticketId: ticket.id,
+    senderUserId: input.tenantUserId,
+    senderRole: "tenant",
+    text,
+    createdAt: getNowIso(),
+  };
+
+  ticket.messages = [...(ticket.messages ?? []), message];
+  persistStore();
+  return message;
+}
+
+export function addLandlordTicketMessage(input: {
+  ticketId: string;
+  landlordUserId: string;
+  messageText: string;
+}) {
+  const ticket = findTicketById(input.ticketId);
+  const property = ticket ? findPropertyById(ticket.propertyId) : null;
+  const text = input.messageText.trim();
+
+  if (!ticket || property?.landlordId !== input.landlordUserId || !text) {
+    return null;
+  }
+
+  const message: TicketMessage = {
+    id: randomUUID(),
+    ticketId: ticket.id,
+    senderUserId: input.landlordUserId,
+    senderRole: "landlord",
+    text,
+    createdAt: getNowIso(),
+  };
+
+  ticket.messages = [...(ticket.messages ?? []), message];
+  persistStore();
+  return message;
 }
 
 export function getRepairTickets() {

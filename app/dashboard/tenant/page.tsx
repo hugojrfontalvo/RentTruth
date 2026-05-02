@@ -8,10 +8,12 @@ import {
   submitTenantRepairRequest,
   tenantConfirmRepairFixedAction,
   tenantReportRepairStillBrokenAction,
+  tenantSendTicketMessageAction,
 } from "@/app/actions/tenant";
 import { SupportEntryButtons } from "@/components/support-entry-buttons";
 import { TenantJoinForm } from "@/components/tenant-join-form";
 import { TenantRepairUploadFields } from "@/components/tenant-repair-upload-fields";
+import { TicketMessageThread } from "@/components/ticket-message-thread";
 import { roleLabels } from "@/lib/auth";
 import {
   type RepairTicket,
@@ -830,6 +832,12 @@ export default async function TenantDashboardPage({
                         {ticket.tenantFeedback ? ` Your latest note: ${ticket.tenantFeedback}` : ""}
                       </div>
                     ) : null}
+
+                    <TicketMessageThread
+                      ticketId={ticket.id}
+                      currentRole="tenant"
+                      sendMessageAction={tenantSendTicketMessageAction}
+                    />
                   </article>
                 ))}
 

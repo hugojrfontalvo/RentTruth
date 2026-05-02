@@ -5,6 +5,7 @@ import {
   createPropertyAction,
   deletePropertyAction,
   landlordCloseTicketAction,
+  landlordSendTicketMessageAction,
   updatePropertyAction,
 } from "@/app/actions/landlord";
 import {
@@ -29,6 +30,7 @@ import { PropertyShareTools } from "@/components/property-share-tools";
 import { ClipboardButton } from "@/components/clipboard-button";
 import { ShareButton } from "@/components/share-button";
 import { SupportEntryButtons } from "@/components/support-entry-buttons";
+import { TicketMessageThread } from "@/components/ticket-message-thread";
 import { getAbsoluteAppUrl } from "@/lib/app-url";
 import { roleLabels } from "@/lib/auth";
 import {
@@ -1676,6 +1678,12 @@ export default async function LandlordDashboardPage({
                                 .{ticket.tenantFeedback ? ` Feedback: ${ticket.tenantFeedback}` : ""}
                               </div>
                             ) : null}
+
+                            <TicketMessageThread
+                              ticketId={ticket.id}
+                              currentRole="landlord"
+                              sendMessageAction={landlordSendTicketMessageAction}
+                            />
                           </div>
 
                           <div className="w-full max-w-full min-w-0 xl:w-[380px] 2xl:w-[420px]">

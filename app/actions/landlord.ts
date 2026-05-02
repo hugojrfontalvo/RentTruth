@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
 import {
+  addLandlordTicketMessage,
   createPropertyForLandlord,
   deletePropertyForLandlord,
   flushPersistentStore,
@@ -183,4 +184,24 @@ export async function landlordCloseTicketAction(formData: FormData) {
   });
   await flushPersistentStore();
   redirect("/dashboard/landlord?review=closed");
+}
+
+export async function landlordSendTicketMessageAction(formData: FormData) {
+  const session = await getSession();
+
+  if (!session || session.role !== "landlord") {
+    redirect("/login");
+  }
+
+  const ticketId = String(formData.get("ticketId") ?? "").trim();
+  const messageText = String(formData.get("message") ?? "").trim();
+
+  addLandlordTicketMessage({
+    ticketId,
+    landlordUserId: session.id,
+    messageText,
+  });
+  await flushPersistentStore();
+
+  redirect("/dashboard/landlord?message=sent");
 }
