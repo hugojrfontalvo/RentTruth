@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type MouseEvent, useState } from "react";
 import { GoogleAddressAutocomplete } from "@/components/google-address-autocomplete";
 import type { SavedTenantAddress } from "@/components/tenant-join-types";
 
@@ -109,11 +109,16 @@ function getSafeSavedAddress(address?: SavedTenantAddress | null): SavedTenantAd
 export function TenantJoinFieldsClient({
   initialSavedAddress,
 }: TenantJoinFieldsClientProps) {
-  const savedAddress = getSafeSavedAddress(initialSavedAddress);
-  const defaultPropertyType = savedAddress?.propertyType ?? "Apartment";
+  const serverSavedAddress = getSafeSavedAddress(initialSavedAddress);
+  const defaultPropertyType = serverSavedAddress?.propertyType ?? "Apartment";
   const [selectedPropertyType, setSelectedPropertyType] = useState<
     SavedTenantAddress["propertyType"]
   >(defaultPropertyType);
+  const [localSavedAddress, setLocalSavedAddress] = useState<SavedTenantAddress | null>(
+    serverSavedAddress,
+  );
+  const [joinCode, setJoinCode] = useState("");
+  const savedAddress = localSavedAddress ?? serverSavedAddress;
   const savedAddressLabel = savedAddress ? formatAddress(savedAddress) : "";
   const effectivePropertyType = savedAddress?.propertyType ?? selectedPropertyType;
   const helperValue = savedAddress
@@ -122,6 +127,41 @@ export function TenantJoinFieldsClient({
   const savedAddressStatus = savedAddress
     ? "Ready for code verification"
     : "Address required";
+  const isUnitReady =
+    !propertyTypeRequiresUnit(effectivePropertyType) || Boolean(savedAddress?.unitNumber);
+  const canRequestAccess = Boolean(savedAddress && isUnitReady && joinCode.trim());
+
+  function handleSaveAddressClick(event: MouseEvent<HTMLButtonElement>) {
+    const form = event.currentTarget.form;
+
+    if (!form) {
+      return;
+    }
+
+    const formData = new FormData(form);
+    const streetAddress = normalizeText(formData.get("streetAddress"));
+    const city = normalizeText(formData.get("city"));
+    const state = normalizeText(formData.get("state")).toUpperCase();
+    const zip = normalizeZip(formData.get("zip"));
+    const unitNumber = normalizeText(formData.get("unitNumber")).toUpperCase();
+
+    if (!streetAddress || !city || !state || zip.length !== 5) {
+      return;
+    }
+
+    if (propertyTypeRequiresUnit(selectedPropertyType) && !unitNumber) {
+      return;
+    }
+
+    setLocalSavedAddress({
+      streetAddress,
+      city,
+      state,
+      zip,
+      propertyType: selectedPropertyType,
+      unitNumber: propertyTypeRequiresUnit(selectedPropertyType) ? unitNumber : undefined,
+    });
+  }
 
   return (
     <>
@@ -332,6 +372,7 @@ export function TenantJoinFieldsClient({
               type="submit"
               name="intent"
               value="save-address"
+              onClick={handleSaveAddressClick}
               className="min-h-[48px] w-full rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 sm:w-auto"
             >
               {savedAddress ? "Update saved address" : "Save address"}
@@ -379,6 +420,8 @@ export function TenantJoinFieldsClient({
             <input
               type="text"
               name="joinCode"
+              value={joinCode}
+              onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
               placeholder={
                 savedAddress
                   ? "Enter the landlord-provided join code"
@@ -424,7 +467,7 @@ export function TenantJoinFieldsClient({
           type="submit"
           name="intent"
           value="verify-join"
-          disabled={!savedAddress}
+          disabled={!canRequestAccess}
           className="mt-5 w-full rounded-full bg-ink px-6 py-3.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:hover:translate-y-0"
         >
           Request Property Access
