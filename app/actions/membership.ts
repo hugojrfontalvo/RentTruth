@@ -127,7 +127,6 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
   const city = String(formData.get("city") ?? "").trim();
   const state = String(formData.get("state") ?? "").trim().toUpperCase();
   const zip = normalizeZipCode(String(formData.get("zip") ?? ""));
-  const propertyId = String(formData.get("propertyId") ?? "").trim();
   const joinCode = String(formData.get("joinCode") ?? "").trim().toUpperCase();
   const unitNumber = String(formData.get("unitNumber") ?? "").trim().toUpperCase();
   const buildingNumber = String(formData.get("buildingNumber") ?? "").trim().toUpperCase();
@@ -157,6 +156,11 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
         }
       : null;
 
+  console.log("tenant saved address loaded", {
+    tenantUserId: session.id,
+    hasSavedAddress: Boolean(savedAddressRecord),
+  });
+
   if (intent === "save-address") {
     if (!streetAddress || !city || !state || !zip) {
       redirect("/dashboard/tenant?joinError=address-required");
@@ -185,22 +189,10 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
     redirect("/dashboard/tenant?membership=address-saved");
   }
 
-  const currentAddress =
-    streetAddress && city && state && zip
-      ? {
-          streetAddress,
-          city,
-          state,
-          zip,
-          propertyType: normalizedSavedPropertyType,
-          unitNumber: unitNumber || savedAddressRecord?.unitNumber,
-          buildingNumber: buildingNumber || savedAddressRecord?.buildingNumber,
-        }
-      : savedAddressRecord;
+  const currentAddress = savedAddressRecord;
 
   const selectedPropertyByAddress =
-    (propertyId ? findPropertyById(propertyId) : null) ??
-    (currentAddress ? findPropertyBySavedAddress(currentAddress) : null);
+    currentAddress ? findPropertyBySavedAddress(currentAddress) : null;
   console.log("join code lookup started", { joinCode, intent });
   const propertyFromJoinCode = joinCode ? findPropertyByJoinCode(joinCode) : null;
 
@@ -230,14 +222,7 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
   });
 
   if (intent === "use-landlord-address") {
-    console.log("tenant accepted landlord suggested address", {
-      joinCode,
-      propertyId: propertyFromJoinCode.id,
-    });
-
-    const canUseSuggestedAddress =
-      isClosePropertyAddressMatch(propertyFromJoinCode, currentAddress) ||
-      formatTenantAddress(currentAddress) !== getPropertyFullAddress(propertyFromJoinCode);
+    const canUseSuggestedAddress = isClosePropertyAddressMatch(propertyFromJoinCode, currentAddress);
 
     if (!canUseSuggestedAddress) {
       redirect(`/dashboard/tenant?joinError=join-code-address-mismatch&joinCode=${joinCode}`);
@@ -257,15 +242,40 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
         : undefined,
     };
 
+    console.log("tenant accepted landlord suggested address", {
+      joinCode,
+      propertyId: propertyFromJoinCode.id,
+      landlordAddress: getPropertyFullAddress(propertyFromJoinCode),
+      previousTenantAddress: formatTenantAddress(currentAddress),
+    });
+
     saveTenantAddress(session.id, landlordAddress);
     await flushPersistentStore();
-    redirect(`/dashboard/tenant?membership=address-saved&joinCode=${joinCode}`);
+    setTenantMembershipRequest({
+      userId: session.id,
+      propertyId: propertyFromJoinCode.id,
+      savedAddress: formatTenantAddress(landlordAddress),
+      savedStreetAddress: landlordAddress.streetAddress,
+      savedCity: landlordAddress.city,
+      savedState: landlordAddress.state,
+      savedZip: landlordAddress.zip,
+      savedPropertyType: propertyFromJoinCode.propertyType,
+      unitNumber: landlordAddress.unitNumber,
+      buildingNumber: landlordAddress.buildingNumber,
+      requestedAt: "Today",
+    });
+    await flushPersistentStore();
+    console.log("pending approval created", {
+      tenantUserId: session.id,
+      propertyId: propertyFromJoinCode.id,
+    });
+    redirect("/dashboard/tenant?membership=requested");
   }
 
   if (!selectedPropertyByAddress || propertyFromJoinCode.id !== selectedPropertyByAddress.id) {
     if (!joinCodeAddressMatches) {
       const isCloseMatch = isClosePropertyAddressMatch(propertyFromJoinCode, currentAddress);
-      console.log("address mismatch", {
+      console.log(isCloseMatch ? "address close mismatch" : "address mismatch", {
         joinCode,
         propertyId: propertyFromJoinCode.id,
         isCloseMatch,
@@ -289,7 +299,7 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
     requestedUnitNumber &&
     !joinCodeAddressMatches
   ) {
-    console.log("address mismatch", {
+    console.log("address close mismatch", {
       joinCode,
       propertyId: propertyFromJoinCode.id,
       isCloseMatch: true,
@@ -298,6 +308,11 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
     });
     redirect(`/dashboard/tenant?joinError=close-address-mismatch&joinCode=${joinCode}`);
   }
+
+  console.log("address exact match", {
+    joinCode,
+    propertyId: propertyFromJoinCode.id,
+  });
 
   setTenantMembershipRequest({
     userId: session.id,
@@ -317,6 +332,10 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
     requestedAt: "Today",
   });
   await flushPersistentStore();
+  console.log("pending approval created", {
+    tenantUserId: session.id,
+    propertyId: propertyFromJoinCode.id,
+  });
 
   redirect("/dashboard/tenant?membership=requested");
 }

@@ -37,20 +37,6 @@ function normalizeZip(value: unknown) {
   return normalizeText(value).replace(/\D/g, "").slice(0, 5);
 }
 
-function formatAddress(input: SavedTenantAddress) {
-  const propertyType = normalizePropertyType(input.propertyType);
-  const unitSegment =
-    propertyTypeRequiresUnit(propertyType) && normalizeText(input.unitNumber)
-      ? `, Apt ${normalizeText(input.unitNumber).toUpperCase()}`
-      : "";
-  const buildingSegment =
-    propertyTypeRequiresUnit(propertyType) && normalizeText(input.buildingNumber)
-      ? ` Building ${normalizeText(input.buildingNumber).toUpperCase()}`
-      : "";
-
-  return `${normalizeText(input.streetAddress)}${unitSegment}${buildingSegment}, ${normalizeText(input.city)}, ${normalizeText(input.state).toUpperCase()} ${normalizeZip(input.zip)}`;
-}
-
 function getTenantPropertyTypeLabel(propertyType: SavedTenantAddress["propertyType"]) {
   if (propertyType === "House") {
     return "Single residence";
@@ -128,7 +114,6 @@ export function TenantJoinFieldsClient({
   );
   const [joinCode, setJoinCode] = useState(normalizeText(initialJoinCode).toUpperCase());
   const savedAddress = localSavedAddress ?? serverSavedAddress;
-  const savedAddressLabel = savedAddress ? formatAddress(savedAddress) : "";
   const effectivePropertyType = savedAddress?.propertyType ?? selectedPropertyType;
   const helperValue = savedAddress
     ? `${savedAddress.streetAddress}, ${savedAddress.city}, ${savedAddress.state} ${savedAddress.zip}`
@@ -200,10 +185,21 @@ export function TenantJoinFieldsClient({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                  Saved address record
+                  Saved Address
                 </p>
-                <p className="mt-2 font-medium text-emerald-950">{savedAddressLabel}</p>
-                <p className="mt-1 text-sm text-emerald-800">
+                <div className="mt-3 grid gap-2 text-sm text-emerald-950">
+                  <p><span className="font-semibold">Street:</span> {savedAddress.streetAddress}</p>
+                  {propertyTypeRequiresUnit(savedAddress.propertyType) ? (
+                    <>
+                      <p><span className="font-semibold">Apartment / Unit:</span> {savedAddress.unitNumber ?? "Not set"}</p>
+                      <p><span className="font-semibold">Building:</span> {savedAddress.buildingNumber ?? "Not set"}</p>
+                    </>
+                  ) : null}
+                  <p><span className="font-semibold">City:</span> {savedAddress.city}</p>
+                  <p><span className="font-semibold">State:</span> {savedAddress.state}</p>
+                  <p><span className="font-semibold">ZIP:</span> {savedAddress.zip}</p>
+                </div>
+                <p className="mt-3 text-sm text-emerald-800">
                   This address is saved. Enter the landlord join code below when you have it.
                 </p>
               </div>
@@ -253,7 +249,7 @@ export function TenantJoinFieldsClient({
                 href="#edit-address"
                 className="rounded-full border border-emerald-300 bg-white px-5 py-3 text-sm font-semibold text-emerald-800 transition hover:-translate-y-0.5 hover:border-emerald-400"
               >
-                Edit Address
+                Edit / Change Address
               </a>
             </div>
           </div>
