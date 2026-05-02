@@ -206,9 +206,14 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
   const placesContainerRef = useRef<HTMLDivElement>(null);
   const autocompleteServiceRef = useRef<GoogleAutocompleteService | null>(null);
   const placesServiceRef = useRef<GooglePlacesService | null>(null);
+  const predictionRequestIdRef = useRef(0);
+  const predictionTimeoutRef = useRef<number | null>(null);
+  const suppressNextSearchRef = useRef(false);
+  const selectionInProgressRef = useRef(false);
   const [inputValue, setInputValue] = useState(initialValue);
   const [predictions, setPredictions] = useState<GooglePrediction[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [status, setStatus] = useState<"loading" | "ready" | "manual" | "error">(
     googleMapsApiKey ? "loading" : "manual",
   );
@@ -220,7 +225,11 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
 
   useEffect(() => {
     if (!googleMapsApiKey || !placesContainerRef.current) {
+      console.error(
+        "RentTruth Google Places autocomplete disabled: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is missing from the current build environment.",
+      );
       setStatus("manual");
+      setMessage("Google API key is missing. Continue with manual address.");
       return;
     }
 
@@ -253,32 +262,63 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
   }, []);
 
   useEffect(() => {
-    if (status !== "ready" || !autocompleteServiceRef.current) {
+    if (status !== "ready" || !autocompleteServiceRef.current || selectionInProgressRef.current) {
+      if (predictionTimeoutRef.current) {
+        window.clearTimeout(predictionTimeoutRef.current);
+        predictionTimeoutRef.current = null;
+      }
       setIsSearching(false);
       setPredictions([]);
+      setIsDropdownOpen(false);
       return;
     }
 
     const trimmedInput = inputValue.trim();
 
-    if (trimmedInput.length < 3) {
+    if (suppressNextSearchRef.current) {
+      suppressNextSearchRef.current = false;
+      if (predictionTimeoutRef.current) {
+        window.clearTimeout(predictionTimeoutRef.current);
+        predictionTimeoutRef.current = null;
+      }
       setIsSearching(false);
       setPredictions([]);
+      setIsDropdownOpen(false);
+      return;
+    }
+
+    if (trimmedInput.length < 3) {
+      if (predictionTimeoutRef.current) {
+        window.clearTimeout(predictionTimeoutRef.current);
+        predictionTimeoutRef.current = null;
+      }
+      setIsSearching(false);
+      setPredictions([]);
+      setIsDropdownOpen(false);
       return;
     }
 
     let isCancelled = false;
+    const requestId = predictionRequestIdRef.current + 1;
+    predictionRequestIdRef.current = requestId;
     setIsSearching(true);
+    setIsDropdownOpen(true);
+    setMessage("Searching Google address suggestions...");
+
+    if (predictionTimeoutRef.current) {
+      window.clearTimeout(predictionTimeoutRef.current);
+    }
 
     const debounceId = window.setTimeout(() => {
       let didRespond = false;
       const requestInput = trimmedInput;
-      const predictionTimeoutId = window.setTimeout(() => {
-        if (isCancelled || didRespond) return;
+      predictionTimeoutRef.current = window.setTimeout(() => {
+        if (isCancelled || didRespond || predictionRequestIdRef.current !== requestId) return;
 
         didRespond = true;
         setIsSearching(false);
         setPredictions([]);
+        setIsDropdownOpen(false);
         setMessage("No suggestions found. Continue with manual address.");
         console.warn("RentTruth Google Places prediction timed out.", { input: requestInput });
       }, GOOGLE_PREDICTION_TIMEOUT_MS);
@@ -291,10 +331,13 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
             componentRestrictions: { country: "us" },
           },
           (nextPredictions, nextStatus) => {
-            if (isCancelled || didRespond) return;
+            if (isCancelled || didRespond || predictionRequestIdRef.current !== requestId) return;
 
             didRespond = true;
-            window.clearTimeout(predictionTimeoutId);
+            if (predictionTimeoutRef.current) {
+              window.clearTimeout(predictionTimeoutRef.current);
+              predictionTimeoutRef.current = null;
+            }
             const okStatus = window.google?.maps?.places?.PlacesServiceStatus?.OK ?? "OK";
             console.log("RentTruth Google Places prediction response.", {
               input: requestInput,
@@ -306,6 +349,7 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
             if (nextStatus === okStatus) {
               const limitedPredictions = (nextPredictions ?? []).slice(0, 5);
               setPredictions(limitedPredictions);
+              setIsDropdownOpen(limitedPredictions.length > 0);
               if (limitedPredictions.length === 0) {
                 setMessage("No suggestions found. Continue with manual address.");
               } else {
@@ -316,16 +360,21 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
 
             console.warn("RentTruth Google Places prediction failed.", { status: nextStatus });
             setPredictions([]);
+            setIsDropdownOpen(false);
             setMessage(getPredictionStatusMessage(nextStatus));
           },
         );
       } catch (error) {
         if (isCancelled) return;
         didRespond = true;
-        window.clearTimeout(predictionTimeoutId);
+        if (predictionTimeoutRef.current) {
+          window.clearTimeout(predictionTimeoutRef.current);
+          predictionTimeoutRef.current = null;
+        }
         console.error("RentTruth Google Places prediction crashed.", error);
         setIsSearching(false);
         setPredictions([]);
+        setIsDropdownOpen(false);
         setStatus("error");
         setMessage("Google suggestions are unavailable right now. Manual address entry still works below.");
       }
@@ -338,8 +387,17 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
   }, [inputValue, status]);
 
   function selectPrediction(prediction: GooglePrediction) {
+    selectionInProgressRef.current = true;
+    suppressNextSearchRef.current = true;
+    predictionRequestIdRef.current += 1;
+    if (predictionTimeoutRef.current) {
+      window.clearTimeout(predictionTimeoutRef.current);
+      predictionTimeoutRef.current = null;
+    }
     setInputValue(prediction.description);
     setPredictions([]);
+    setIsSearching(false);
+    setIsDropdownOpen(false);
 
     try {
       placesServiceRef.current?.getDetails(
@@ -353,16 +411,25 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
           if (detailStatus === okStatus && place) {
             fillAddressFields(place);
             setMessage("Address selected. Review the populated fields below before saving.");
+            window.setTimeout(() => {
+              selectionInProgressRef.current = false;
+            }, 400);
             return;
           }
 
           console.warn("RentTruth Google Places detail lookup failed.", { status: detailStatus });
           setMessage("We could not fill that address automatically. Use the manual fields below.");
+          window.setTimeout(() => {
+            selectionInProgressRef.current = false;
+          }, 400);
         },
       );
     } catch (error) {
       console.error("RentTruth Google Places detail lookup crashed.", error);
       setMessage("We could not fill that address automatically. Use the manual fields below.");
+      window.setTimeout(() => {
+        selectionInProgressRef.current = false;
+      }, 400);
     }
   }
 
@@ -394,7 +461,7 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
           className="w-full rounded-2xl border border-emerald-100 bg-white px-4 py-3.5 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
         />
 
-        {isLive && (predictions.length > 0 || isSearching) ? (
+        {isLive && isDropdownOpen ? (
           <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-[22px] border border-emerald-100 bg-white p-2 shadow-2xl shadow-slate-900/15">
             {isSearching ? (
               <div className="px-3 py-3 text-sm text-slate-500">Searching addresses...</div>
@@ -404,7 +471,10 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
               <button
                 key={prediction.place_id}
                 type="button"
-                onClick={() => selectPrediction(prediction)}
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  selectPrediction(prediction);
+                }}
                 className="block w-full rounded-2xl px-3 py-3 text-left transition hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
               >
                 <span className="block break-words text-sm font-semibold text-slate-900">
