@@ -6,6 +6,7 @@ import type { SavedTenantAddress } from "@/components/tenant-join-types";
 
 type TenantJoinFieldsClientProps = {
   initialSavedAddress?: SavedTenantAddress | null;
+  initialJoinCode?: string;
 };
 
 const tenantPropertyTypes: SavedTenantAddress["propertyType"][] = [
@@ -42,8 +43,12 @@ function formatAddress(input: SavedTenantAddress) {
     propertyTypeRequiresUnit(propertyType) && normalizeText(input.unitNumber)
       ? `, Apt ${normalizeText(input.unitNumber).toUpperCase()}`
       : "";
+  const buildingSegment =
+    propertyTypeRequiresUnit(propertyType) && normalizeText(input.buildingNumber)
+      ? ` Building ${normalizeText(input.buildingNumber).toUpperCase()}`
+      : "";
 
-  return `${normalizeText(input.streetAddress)}${unitSegment}, ${normalizeText(input.city)}, ${normalizeText(input.state).toUpperCase()} ${normalizeZip(input.zip)}`;
+  return `${normalizeText(input.streetAddress)}${unitSegment}${buildingSegment}, ${normalizeText(input.city)}, ${normalizeText(input.state).toUpperCase()} ${normalizeZip(input.zip)}`;
 }
 
 function getTenantPropertyTypeLabel(propertyType: SavedTenantAddress["propertyType"]) {
@@ -103,11 +108,15 @@ function getSafeSavedAddress(address?: SavedTenantAddress | null): SavedTenantAd
     unitNumber: propertyTypeRequiresUnit(propertyType)
       ? normalizeText(address.unitNumber).toUpperCase() || undefined
       : undefined,
+    buildingNumber: propertyTypeRequiresUnit(propertyType)
+      ? normalizeText(address.buildingNumber).toUpperCase() || undefined
+      : undefined,
   };
 }
 
 export function TenantJoinFieldsClient({
   initialSavedAddress,
+  initialJoinCode = "",
 }: TenantJoinFieldsClientProps) {
   const serverSavedAddress = getSafeSavedAddress(initialSavedAddress);
   const defaultPropertyType = serverSavedAddress?.propertyType ?? "Apartment";
@@ -117,7 +126,7 @@ export function TenantJoinFieldsClient({
   const [localSavedAddress, setLocalSavedAddress] = useState<SavedTenantAddress | null>(
     serverSavedAddress,
   );
-  const [joinCode, setJoinCode] = useState("");
+  const [joinCode, setJoinCode] = useState(normalizeText(initialJoinCode).toUpperCase());
   const savedAddress = localSavedAddress ?? serverSavedAddress;
   const savedAddressLabel = savedAddress ? formatAddress(savedAddress) : "";
   const effectivePropertyType = savedAddress?.propertyType ?? selectedPropertyType;
@@ -144,6 +153,7 @@ export function TenantJoinFieldsClient({
     const state = normalizeText(formData.get("state")).toUpperCase();
     const zip = normalizeZip(formData.get("zip"));
     const unitNumber = normalizeText(formData.get("unitNumber")).toUpperCase();
+    const buildingNumber = normalizeText(formData.get("buildingNumber")).toUpperCase();
 
     if (!streetAddress || !city || !state || zip.length !== 5) {
       return;
@@ -160,6 +170,7 @@ export function TenantJoinFieldsClient({
       zip,
       propertyType: selectedPropertyType,
       unitNumber: propertyTypeRequiresUnit(selectedPropertyType) ? unitNumber : undefined,
+      buildingNumber: propertyTypeRequiresUnit(selectedPropertyType) ? buildingNumber || undefined : undefined,
     });
   }
 
@@ -216,7 +227,7 @@ export function TenantJoinFieldsClient({
                   {savedAddress.propertyType}
                   {propertyTypeRequiresUnit(savedAddress.propertyType)
                     ? savedAddress.unitNumber
-                      ? ` · Unit ${savedAddress.unitNumber}`
+                      ? ` · Unit ${savedAddress.unitNumber}${savedAddress.buildingNumber ? ` · Building ${savedAddress.buildingNumber}` : ""}`
                       : " · Unit needed"
                     : " · No unit needed"}
                 </p>
@@ -298,22 +309,36 @@ export function TenantJoinFieldsClient({
             </label>
 
             {propertyTypeRequiresUnit(selectedPropertyType) ? (
-              <label className="block md:col-span-2">
+              <div className="grid gap-5 md:col-span-2 sm:grid-cols-2">
+              <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  Apartment / Unit number
+                  Apartment / Unit
                 </span>
                 <input
                   type="text"
                   name="unitNumber"
                   defaultValue={savedAddress?.unitNumber ?? ""}
-                  placeholder="4B"
+                  placeholder="303"
                   required
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 uppercase text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
                 />
-                <span className="mt-2 block text-xs leading-5 text-slate-500">
-                  Unit number is required for this property type.
-                </span>
               </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                  Building <span className="font-normal text-slate-400">(optional)</span>
+                </span>
+                <input
+                  type="text"
+                  name="buildingNumber"
+                  defaultValue={savedAddress?.buildingNumber ?? ""}
+                  placeholder="4"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 uppercase text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+                />
+              </label>
+                <span className="mt-2 block text-xs leading-5 text-slate-500">
+                  Unit is required for this property type. Add building if your property uses one.
+                </span>
+              </div>
             ) : (
               <div className="rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-800 md:col-span-2">
                 House selected. No apartment or unit number is required.
@@ -436,7 +461,7 @@ export function TenantJoinFieldsClient({
           {effectivePropertyType && propertyTypeRequiresUnit(effectivePropertyType) ? (
             <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-4 text-sm leading-7 text-sky-800">
               {savedAddress?.unitNumber
-                ? `RentTruth will verify this code for Unit ${savedAddress.unitNumber}. Edit the saved address above if the unit is wrong.`
+                ? `RentTruth will verify this code for Unit ${savedAddress.unitNumber}${savedAddress.buildingNumber ? `, Building ${savedAddress.buildingNumber}` : ""}. Edit the saved address above if it is wrong.`
                 : "Add your apartment or unit number in Step 1 before requesting access."}
             </div>
           ) : effectivePropertyType ? (

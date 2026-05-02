@@ -25,6 +25,7 @@ export async function createPropertyAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const streetAddress = String(formData.get("streetAddress") ?? "").trim();
   const unitNumber = String(formData.get("unitNumber") ?? "").trim().toUpperCase();
+  const buildingNumber = String(formData.get("buildingNumber") ?? "").trim().toUpperCase();
   const city = String(formData.get("city") ?? "").trim();
   const state = String(formData.get("state") ?? "").trim();
   const zip = normalizeZipCode(String(formData.get("zip") ?? ""));
@@ -59,6 +60,7 @@ export async function createPropertyAction(formData: FormData) {
     name: name || undefined,
     streetAddress,
     unitNumber: propertyTypeValue === "House" ? undefined : unitNumber,
+    buildingNumber: propertyTypeValue === "House" ? undefined : buildingNumber,
     city,
     state,
     zip,
@@ -81,6 +83,7 @@ export async function updatePropertyAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const streetAddress = String(formData.get("streetAddress") ?? "").trim();
   const unitNumber = String(formData.get("unitNumber") ?? "").trim().toUpperCase();
+  const buildingNumber = String(formData.get("buildingNumber") ?? "").trim().toUpperCase();
   const city = String(formData.get("city") ?? "").trim();
   const state = String(formData.get("state") ?? "").trim();
   const zip = normalizeZipCode(String(formData.get("zip") ?? ""));
@@ -120,6 +123,7 @@ export async function updatePropertyAction(formData: FormData) {
     name: name || undefined,
     streetAddress,
     unitNumber: propertyTypeValue === "House" ? undefined : unitNumber,
+    buildingNumber: propertyTypeValue === "House" ? undefined : buildingNumber,
     city,
     state,
     zip,

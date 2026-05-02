@@ -67,6 +67,7 @@ export type SessionUser = {
     | "Multi-unit building";
   propertyId?: string;
   unitNumber?: string;
+  buildingNumber?: string;
   membershipStatus?: string;
   membershipRequestedAt?: string;
   tenantVerificationLevel?: "unverified" | "verified";

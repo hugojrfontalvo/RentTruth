@@ -3,6 +3,7 @@ export type JoinableProperty = {
   propertyType: "House" | "Apartment" | "Condo" | "Townhome" | "Multi-unit building";
   streetAddress: string;
   unitNumber?: string;
+  buildingNumber?: string;
   city: string;
   state: string;
   zip: string;
@@ -16,4 +17,5 @@ export type SavedTenantAddress = {
   zip: string;
   propertyType: "House" | "Apartment" | "Condo" | "Townhome" | "Multi-unit building";
   unitNumber?: string;
+  buildingNumber?: string;
 };

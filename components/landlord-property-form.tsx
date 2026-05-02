@@ -12,7 +12,7 @@ type LandlordPropertyFormProps = {
   submitLabel?: string;
   initialValues?: Pick<
     Property,
-    "id" | "name" | "propertyType" | "streetAddress" | "unitNumber" | "city" | "state" | "zip" | "unitCount"
+    "id" | "name" | "propertyType" | "streetAddress" | "unitNumber" | "buildingNumber" | "city" | "state" | "zip" | "unitCount"
   > | null;
   hideUnitCountField?: boolean;
 };
@@ -135,19 +135,31 @@ export function LandlordPropertyForm({
       </label>
 
       {selectedPropertyType !== "House" ? (
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-slate-700">Apartment / Unit number <span className="font-normal text-slate-400">(optional)</span></span>
-          <input
-            type="text"
-            name="unitNumber"
-            defaultValue={initialValues?.unitNumber ?? ""}
-            placeholder="4B"
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 uppercase text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-          />
-          <span className="mt-2 block text-xs leading-5 text-slate-500">
-            Optional for landlord setup. Tenants provide their exact unit when they request access.
+        <div className="grid gap-5 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-slate-700">Apartment / Unit <span className="font-normal text-slate-400">(optional)</span></span>
+            <input
+              type="text"
+              name="unitNumber"
+              defaultValue={initialValues?.unitNumber ?? ""}
+              placeholder="303"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 uppercase text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-slate-700">Building <span className="font-normal text-slate-400">(optional)</span></span>
+            <input
+              type="text"
+              name="buildingNumber"
+              defaultValue={initialValues?.buildingNumber ?? ""}
+              placeholder="4"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 uppercase text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+            />
+          </label>
+          <span className="text-xs leading-5 text-slate-500 md:col-span-2">
+            Optional for landlord setup. Tenants provide their exact unit/building when they request access.
           </span>
-        </label>
+        </div>
       ) : (
         <div className="rounded-[24px] border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-7 text-sky-800">
           House selected. No apartment or unit number is required.

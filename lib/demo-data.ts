@@ -42,6 +42,7 @@ export type AppUser = {
   savedPropertyType?: PropertyType;
   propertyId?: string;
   unitNumber?: string;
+  buildingNumber?: string;
   membershipStatus?: MembershipStatus;
   membershipRequestedAt?: string;
   tenantVerificationLevel?: TenantVerificationLevel;
@@ -57,6 +58,7 @@ export type Property = {
   name?: string;
   streetAddress: string;
   unitNumber?: string;
+  buildingNumber?: string;
   city: string;
   state: string;
   zip: string;
@@ -363,6 +365,7 @@ export type SavedTenantAddress = {
   zip: string;
   propertyType: PropertyType;
   unitNumber?: string;
+  buildingNumber?: string;
 };
 
 export const commonRepairPricingCatalog: Array<{
@@ -437,6 +440,7 @@ type CreateUserInput = {
   savedPropertyType?: PropertyType;
   propertyId?: string;
   unitNumber?: string;
+  buildingNumber?: string;
   membershipStatus?: MembershipStatus;
   membershipRequestedAt?: string;
   name?: string;
@@ -1915,10 +1919,19 @@ export function getPropertyDisplayName(property: Property) {
   return property.name?.trim() || property.streetAddress;
 }
 
+function getUnitBuildingSegment(input: { unitNumber?: string; buildingNumber?: string }) {
+  const parts = [
+    input.unitNumber?.trim() ? `Apt ${input.unitNumber.trim().toUpperCase()}` : "",
+    input.buildingNumber?.trim() ? `Building ${input.buildingNumber.trim().toUpperCase()}` : "",
+  ].filter(Boolean);
+
+  return parts.length > 0 ? `, ${parts.join(" ")}` : "";
+}
+
 export function getPropertyFullAddress(property: Property) {
   const unitSegment =
-    propertyTypeRequiresUnit(property.propertyType) && property.unitNumber?.trim()
-      ? `, Apt ${property.unitNumber.trim().toUpperCase()}`
+    propertyTypeRequiresUnit(property.propertyType)
+      ? getUnitBuildingSegment(property)
       : "";
 
   return `${property.streetAddress}${unitSegment}, ${property.city}, ${property.state} ${property.zip}`;
@@ -1927,8 +1940,11 @@ export function getPropertyFullAddress(property: Property) {
 export function getPropertyServiceAddress(property: Property, unitNumber?: string) {
   const normalizedUnit = (unitNumber || property.unitNumber)?.trim().toUpperCase();
   const unitSegment =
-    propertyTypeRequiresUnit(property.propertyType) && normalizedUnit
-      ? `, Apt ${normalizedUnit}`
+    propertyTypeRequiresUnit(property.propertyType)
+      ? getUnitBuildingSegment({
+          unitNumber: normalizedUnit,
+          buildingNumber: property.buildingNumber,
+        })
       : "";
 
   return `${property.streetAddress}${unitSegment}, ${property.city}, ${property.state} ${property.zip}`;
@@ -2817,6 +2833,7 @@ export function setTenantMembershipRequest(input: {
   savedZip?: string;
   savedPropertyType?: PropertyType;
   unitNumber?: string;
+  buildingNumber?: string;
   requestedAt: string;
 }) {
   const user = findUserById(input.userId);
@@ -2833,6 +2850,7 @@ export function setTenantMembershipRequest(input: {
   user.savedZip = input.savedZip ? normalizeZipCode(input.savedZip) : user.savedZip;
   user.savedPropertyType = input.savedPropertyType ?? user.savedPropertyType;
   user.unitNumber = input.unitNumber;
+  user.buildingNumber = input.buildingNumber;
   user.membershipStatus = "Pending";
   user.membershipRequestedAt = input.requestedAt;
   recordActivity({
@@ -2849,8 +2867,8 @@ export function setTenantMembershipRequest(input: {
 
 export function formatTenantAddress(input: SavedTenantAddress) {
   const unitSegment =
-    propertyTypeRequiresUnit(input.propertyType) && input.unitNumber?.trim()
-      ? `, Apt ${input.unitNumber.trim().toUpperCase()}`
+    propertyTypeRequiresUnit(input.propertyType)
+      ? getUnitBuildingSegment(input)
       : "";
 
   return `${input.streetAddress.trim()}${unitSegment}, ${input.city.trim()}, ${input.state
@@ -2860,7 +2878,7 @@ export function formatTenantAddress(input: SavedTenantAddress) {
 
 export function getSavedTenantAddress(user: Pick<
   AppUser,
-  "savedStreetAddress" | "savedCity" | "savedState" | "savedZip" | "savedPropertyType" | "unitNumber"
+  "savedStreetAddress" | "savedCity" | "savedState" | "savedZip" | "savedPropertyType" | "unitNumber" | "buildingNumber"
 >): SavedTenantAddress | null {
   if (!user.savedStreetAddress || !user.savedCity || !user.savedState || !user.savedZip) {
     return null;
@@ -2873,6 +2891,7 @@ export function getSavedTenantAddress(user: Pick<
     zip: normalizeZipCode(user.savedZip),
     propertyType: user.savedPropertyType ?? "Apartment",
     unitNumber: user.unitNumber,
+    buildingNumber: user.buildingNumber,
   };
 }
 
@@ -2891,10 +2910,14 @@ export function saveTenantAddress(userId: string, address: SavedTenantAddress) {
   user.unitNumber = propertyTypeRequiresUnit(address.propertyType)
     ? address.unitNumber?.trim().toUpperCase()
     : undefined;
+  user.buildingNumber = propertyTypeRequiresUnit(address.propertyType)
+    ? address.buildingNumber?.trim().toUpperCase()
+    : undefined;
   user.savedAddress = formatTenantAddress({
     ...address,
     zip: user.savedZip,
     unitNumber: user.unitNumber,
+    buildingNumber: user.buildingNumber,
   });
   recordActivity({
     type: "tenant_address_saved",
@@ -2938,31 +2961,69 @@ export function findPropertyByJoinCode(joinCode: string) {
   return properties.find((property) => property.joinCode === normalized) ?? null;
 }
 
+export function normalizeUnitBuildingText(value?: string) {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/\b(apartment|apt|unit|suite|ste|#)\b/g, " ")
+    .replace(/\b(building|bldg|bld)\b/g, " ")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+export function getNormalizedResidenceKey(input: { unitNumber?: string; buildingNumber?: string }) {
+  return normalizeUnitBuildingText(
+    [input.unitNumber, input.buildingNumber ? `building ${input.buildingNumber}` : ""]
+      .filter(Boolean)
+      .join(" "),
+  );
+}
+
+function baseAddressMatches(
+  property: Pick<Property, "streetAddress" | "city" | "state" | "zip">,
+  input: Pick<SavedTenantAddress, "streetAddress" | "city" | "state" | "zip">,
+) {
+  return (
+    property.streetAddress.trim().toLowerCase() === input.streetAddress.trim().toLowerCase() &&
+    property.city.trim().toLowerCase() === input.city.trim().toLowerCase() &&
+    property.state.trim().toLowerCase() === input.state.trim().toLowerCase() &&
+    normalizeZipCode(property.zip) === normalizeZipCode(input.zip)
+  );
+}
+
+export function propertyAddressMatchesSavedAddress(
+  property: Property,
+  input: Pick<SavedTenantAddress, "streetAddress" | "city" | "state" | "zip" | "unitNumber" | "buildingNumber">,
+) {
+  if (!baseAddressMatches(property, input)) {
+    return false;
+  }
+
+  if (!propertyTypeRequiresUnit(property.propertyType)) {
+    return true;
+  }
+
+  const propertyResidenceKey = getNormalizedResidenceKey(property);
+  const tenantResidenceKey = getNormalizedResidenceKey(input);
+
+  return !propertyResidenceKey || !tenantResidenceKey || propertyResidenceKey === tenantResidenceKey;
+}
+
+export function isClosePropertyAddressMatch(
+  property: Property,
+  input: Pick<SavedTenantAddress, "streetAddress" | "city" | "state" | "zip">,
+) {
+  return baseAddressMatches(property, input);
+}
+
 export function findPropertyByExactAddress(input: {
   streetAddress: string;
   unitNumber?: string;
+  buildingNumber?: string;
   city: string;
   state: string;
   zip: string;
 }) {
-  const street = input.streetAddress.trim().toLowerCase();
-  const unitNumber = input.unitNumber?.trim().toUpperCase();
-  const city = input.city.trim().toLowerCase();
-  const state = input.state.trim().toLowerCase();
-  const zip = normalizeZipCode(input.zip);
-
-  return (
-    properties.find(
-      (property) =>
-        property.streetAddress.trim().toLowerCase() === street &&
-        (!property.unitNumber ||
-          !unitNumber ||
-          property.unitNumber.trim().toUpperCase() === unitNumber) &&
-        property.city.trim().toLowerCase() === city &&
-        property.state.trim().toLowerCase() === state &&
-        normalizeZipCode(property.zip) === zip,
-    ) ?? null
-  );
+  return properties.find((property) => propertyAddressMatchesSavedAddress(property, input)) ?? null;
 }
 
 function normalizeAddressLabel(value: string) {
@@ -2973,6 +3034,7 @@ export function findPropertyBySavedAddress(input: SavedTenantAddress) {
   return findPropertyByExactAddress({
     streetAddress: input.streetAddress,
     unitNumber: input.unitNumber,
+    buildingNumber: input.buildingNumber,
     city: input.city,
     state: input.state,
     zip: input.zip,
@@ -3009,6 +3071,7 @@ export function createPropertyForLandlord(input: {
   name?: string;
   streetAddress: string;
   unitNumber?: string;
+  buildingNumber?: string;
   city: string;
   state: string;
   zip: string;
@@ -3022,6 +3085,9 @@ export function createPropertyForLandlord(input: {
     streetAddress: input.streetAddress.trim(),
     unitNumber: propertyTypeRequiresUnit(input.propertyType)
       ? input.unitNumber?.trim().toUpperCase()
+      : undefined,
+    buildingNumber: propertyTypeRequiresUnit(input.propertyType)
+      ? input.buildingNumber?.trim().toUpperCase()
       : undefined,
     city: input.city.trim(),
     state: input.state.trim().toUpperCase(),
@@ -3058,6 +3124,7 @@ export function updatePropertyForLandlord(input: {
   name?: string;
   streetAddress: string;
   unitNumber?: string;
+  buildingNumber?: string;
   city: string;
   state: string;
   zip: string;
@@ -3073,6 +3140,9 @@ export function updatePropertyForLandlord(input: {
   property.streetAddress = input.streetAddress.trim();
   property.unitNumber = propertyTypeRequiresUnit(input.propertyType)
     ? input.unitNumber?.trim().toUpperCase()
+    : undefined;
+  property.buildingNumber = propertyTypeRequiresUnit(input.propertyType)
+    ? input.buildingNumber?.trim().toUpperCase()
     : undefined;
   property.city = input.city.trim();
   property.state = input.state.trim().toUpperCase();
