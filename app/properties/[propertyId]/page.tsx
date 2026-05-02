@@ -56,24 +56,38 @@ export default async function PropertyProfilePage({
             </p>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 xl:grid-cols-4">
-            <article className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
-              <p className="text-sm font-medium text-slate-500">Trust Score</p>
-              <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.landlordTrustScore}</p>
-            </article>
-            <article className="rounded-[22px] border border-sky-200 bg-sky-50/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
-              <p className="text-sm font-medium text-sky-700">Confidence Level</p>
-              <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.confidenceLevel}</p>
-            </article>
-            <article className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
-              <p className="text-sm font-medium text-slate-500">Average completion time</p>
-              <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.averageCompletionTime}</p>
-            </article>
-            <article className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
-              <p className="text-sm font-medium text-slate-500">Completed on time</p>
-              <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.ticketsCompletedOnTimeRate}</p>
-            </article>
-          </div>
+          {profile.hasVerifiedMaintenanceHistory ? (
+            <div className="mt-6 grid grid-cols-2 gap-3 sm:mt-8 sm:gap-4 xl:grid-cols-4">
+              <article className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
+                <p className="text-sm font-medium text-slate-500">Trust Score</p>
+                <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.landlordTrustScore}</p>
+              </article>
+              <article className="rounded-[22px] border border-sky-200 bg-sky-50/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
+                <p className="text-sm font-medium text-sky-700">Confidence Level</p>
+                <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.confidenceLevel}</p>
+              </article>
+              <article className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
+                <p className="text-sm font-medium text-slate-500">Average completion time</p>
+                <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.averageCompletionTime}</p>
+              </article>
+              <article className="rounded-[22px] border border-white/80 bg-white/90 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[30px] sm:p-6">
+                <p className="text-sm font-medium text-slate-500">Completed on time</p>
+                <p className="mt-3 font-display text-3xl font-semibold text-ink sm:text-4xl">{profile.ticketsCompletedOnTimeRate}</p>
+              </article>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-[24px] border border-slate-200 bg-white/90 p-5 shadow-lg shadow-slate-200/70 sm:mt-8 sm:rounded-[30px] sm:p-6">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Maintenance history
+              </p>
+              <h2 className="mt-3 font-display text-2xl font-semibold tracking-tight text-ink">
+                No verified maintenance history yet.
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">
+                RentTruth scores and completion metrics will appear after this property has real completed repair tickets.
+              </p>
+            </div>
+          )}
 
           <section className="mt-6 rounded-[26px] border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/60 sm:mt-8 sm:rounded-[32px] sm:p-7">
             <div className="grid gap-4 lg:grid-cols-[0.7fr_0.3fr] lg:items-center">
@@ -119,9 +133,15 @@ export default async function PropertyProfilePage({
                 Maintenance performance snapshot
               </h2>
               <p className="mt-4 text-base leading-8 text-slate-600">{profile.repairHistorySummary}</p>
-              <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-600">
-                Average first response currently sits at {profile.averageRepairResponseTime}, but public trust on RentTruth is weighted more heavily toward completion speed and on-time repair follow-through.
-              </div>
+              {profile.hasVerifiedMaintenanceHistory ? (
+                <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-600">
+                  Average first response currently sits at {profile.averageRepairResponseTime}, but public trust on RentTruth is weighted more heavily toward completion speed and on-time repair follow-through.
+                </div>
+              ) : (
+                <div className="mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-600">
+                  Not enough RentTruth data yet. Completion, response, and on-time metrics will appear after verified repair history exists.
+                </div>
+              )}
             </section>
           </div>
 

@@ -268,6 +268,8 @@ export type PublicPropertyProfile = {
   landlordTrustScore: number;
   confidenceLevel: TrustConfidenceLevel;
   trustTransparencyMessage: string;
+  hasVerifiedMaintenanceHistory: boolean;
+  completedMaintenanceTicketCount: number;
   independentTenantCount: number;
   verifiedConfirmationCount: number;
   weightedConfirmationCount: number;
@@ -3016,12 +3018,12 @@ export function createPropertyForLandlord(input: {
     unitCount: input.propertyType === "House" ? 1 : Math.max(1, input.unitCount ?? 1),
     joinCode: makeUniqueJoinCode(input.name?.trim() || input.streetAddress),
     createdAt: "Today",
-    trustScore: 88,
-    averageRepairResponseTime: "4.0 hours",
-    averageCompletionTime: "21.0 hours",
-    ticketsCompletedOnTimeRate: "89%",
-    urgentRepairCompletionSpeed: "7.2 hours",
-    repairHistorySummary: "Newly added property. Public repair profile will populate as tenant maintenance data comes in.",
+    trustScore: 0,
+    averageRepairResponseTime: "Not enough data",
+    averageCompletionTime: "Not enough data",
+    ticketsCompletedOnTimeRate: "Not enough data",
+    urgentRepairCompletionSpeed: "Not enough data",
+    repairHistorySummary: "No verified maintenance history yet. Metrics will appear after completed RentTruth tickets.",
   };
 
   store.propertyCounter += 1;
@@ -3154,6 +3156,7 @@ export function getPropertyTrustSignal(property: Property) {
   const confirmedTickets = propertyTickets.filter(
     (ticket) => ticket.tenantConfirmationStatus === "Tenant confirmed fixed",
   );
+  const hasVerifiedMaintenanceHistory = confirmedTickets.length > 0;
   const weightedConfirmationCount = confirmedTickets.reduce((sum, ticket) => {
     const tenant = findUserById(ticket.tenantUserId);
     return sum + getTenantConfirmationWeight(tenant);
@@ -3188,23 +3191,30 @@ export function getPropertyTrustSignal(property: Property) {
   const confidenceMultiplier =
     confidenceLevel === "High" ? 1 : confidenceLevel === "Medium" ? 0.9 : 0.78;
   const confirmationAdjustment = Math.min(10, Math.round(weightedConfirmationCount * 2));
-  const landlordTrustScore = Math.max(
-    0,
-    Math.min(100, Math.round(property.trustScore * confidenceMultiplier + confirmationAdjustment)),
-  );
-  const trustTransparencyMessage =
-    verifiedConfirmationCount > 0
-      ? `Based on ${verifiedConfirmationCount} verified tenant confirmation${
-          verifiedConfirmationCount === 1 ? "" : "s"
-        } across ${independentTenantCount} independent tenant${
-          independentTenantCount === 1 ? "" : "s"
-        }.`
-      : "Limited independent tenant data available.";
+  const landlordTrustScore = hasVerifiedMaintenanceHistory
+    ? Math.max(
+        0,
+        Math.min(100, Math.round(property.trustScore * confidenceMultiplier + confirmationAdjustment)),
+      )
+    : 0;
+  let trustTransparencyMessage = "No verified maintenance history yet.";
+
+  if (hasVerifiedMaintenanceHistory && verifiedConfirmationCount > 0) {
+    trustTransparencyMessage = `Based on ${verifiedConfirmationCount} verified tenant confirmation${
+      verifiedConfirmationCount === 1 ? "" : "s"
+    } across ${independentTenantCount} independent tenant${
+      independentTenantCount === 1 ? "" : "s"
+    }.`;
+  } else if (hasVerifiedMaintenanceHistory) {
+    trustTransparencyMessage = "Limited independent tenant data available.";
+  }
 
   return {
     landlordTrustScore,
     confidenceLevel,
     trustTransparencyMessage,
+    hasVerifiedMaintenanceHistory,
+    completedMaintenanceTicketCount: confirmedTickets.length,
     independentTenantCount,
     verifiedConfirmationCount,
     weightedConfirmationCount: Number(weightedConfirmationCount.toFixed(2)),
@@ -3972,6 +3982,8 @@ export function getPublicPropertyProfile(propertyId: string): PublicPropertyProf
     landlordTrustScore: trustSignal.landlordTrustScore,
     confidenceLevel: trustSignal.confidenceLevel,
     trustTransparencyMessage: trustSignal.trustTransparencyMessage,
+    hasVerifiedMaintenanceHistory: trustSignal.hasVerifiedMaintenanceHistory,
+    completedMaintenanceTicketCount: trustSignal.completedMaintenanceTicketCount,
     independentTenantCount: trustSignal.independentTenantCount,
     verifiedConfirmationCount: trustSignal.verifiedConfirmationCount,
     weightedConfirmationCount: trustSignal.weightedConfirmationCount,

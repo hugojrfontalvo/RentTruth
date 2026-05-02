@@ -89,18 +89,26 @@ export default async function ResearchPage({
                           {getPropertyFullAddress(property)}
                         </h2>
                         <div className="mt-4 flex flex-wrap gap-2">
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                            Trust score {trustSignal.landlordTrustScore}
-                          </span>
-                          <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
-                            Confidence {trustSignal.confidenceLevel}
-                          </span>
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                            Avg. completion {property.averageCompletionTime}
-                          </span>
-                          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                            On-time {property.ticketsCompletedOnTimeRate}
-                          </span>
+                          {trustSignal.hasVerifiedMaintenanceHistory ? (
+                            <>
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                                Trust score {trustSignal.landlordTrustScore}
+                              </span>
+                              <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
+                                Confidence {trustSignal.confidenceLevel}
+                              </span>
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                                Avg. completion {property.averageCompletionTime}
+                              </span>
+                              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                                On-time {property.ticketsCompletedOnTimeRate}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                              No verified maintenance history yet
+                            </span>
+                          )}
                         </div>
                         <p className="mt-3 text-sm leading-6 text-slate-500">
                           {trustSignal.trustTransparencyMessage}
