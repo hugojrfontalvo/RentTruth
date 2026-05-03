@@ -19,7 +19,12 @@ function getSafeExtension(fileName: string, mimeType: string) {
     return "png";
   }
 
-  if (mimeType === "image/heic" || mimeType === "image/heif") {
+  if (
+    mimeType === "image/heic" ||
+    mimeType === "image/heif" ||
+    mimeType === "image/heic-sequence" ||
+    mimeType === "image/heif-sequence"
+  ) {
     return "heic";
   }
 

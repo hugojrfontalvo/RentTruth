@@ -7,6 +7,7 @@
     "build": "next build",
     "test:address-flow": "node --test tests/address-mismatch-flow.test.cjs",
     "test:tenant-address": "node --test tests/tenant-saved-address-persistence.test.cjs",
+    "test:repair-attachments": "node --test tests/repair-attachment-validation.test.cjs",
     "start": "next start",
     "lint": "next lint"
   },

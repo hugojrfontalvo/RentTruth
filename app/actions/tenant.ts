@@ -11,30 +11,14 @@ import {
   propertyTypeRequiresUnit,
   tenantConfirmTicketOutcome,
 } from "@/lib/demo-data";
+import {
+  getRepairAttachmentRejectionReason,
+  isSupportedRepairAttachment,
+  normalizeRepairAttachmentMimeType,
+} from "@/lib/repair-attachment-validation";
 import { saveRepairAttachmentFile } from "@/lib/upload-storage";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const SUPPORTED_ATTACHMENT_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
-];
-
-function isSupportedRepairFile(fileName: string, mimeType: string) {
-  const normalizedName = fileName.toLowerCase();
-
-  return (
-    SUPPORTED_ATTACHMENT_TYPES.includes(mimeType) ||
-    normalizedName.endsWith(".jpg") ||
-    normalizedName.endsWith(".jpeg") ||
-    normalizedName.endsWith(".png") ||
-    normalizedName.endsWith(".heic") ||
-    normalizedName.endsWith(".heif") ||
-    normalizedName.endsWith(".pdf")
-  );
-}
 
 function getUploadedRepairFile(formData: FormData) {
   const candidates = [
@@ -75,18 +59,41 @@ export async function submitTenantRepairRequest(formData: FormData) {
 
   if (photoFile && typeof photoFile === "object" && "name" in photoFile) {
     const fileName = String(photoFile.name || "").trim();
-    const mimeType = "type" in photoFile ? String(photoFile.type || "").trim() : "";
+    const mimeType = normalizeRepairAttachmentMimeType(
+      "type" in photoFile ? String(photoFile.type || "").trim() : "",
+    );
     photoPlaceholder = fileName || "No photo uploaded";
 
     const fileSize = "size" in photoFile ? Number(photoFile.size) : 0;
+    console.log("ticket upload file selected", {
+      name: fileName,
+      type: mimeType || "unknown",
+      size: fileSize,
+    });
 
     if (fileSize > MAX_ATTACHMENT_BYTES) {
+      console.log("ticket upload rejected", {
+        reason: "file-too-large",
+        name: fileName,
+        type: mimeType || "unknown",
+        size: fileSize,
+      });
       redirect("/dashboard/tenant?error=attachment-too-large");
     }
 
-    if (fileName && !isSupportedRepairFile(fileName, mimeType)) {
+    if (fileName && !isSupportedRepairAttachment({ fileName, mimeType })) {
+      console.log("ticket upload rejected", {
+        reason: getRepairAttachmentRejectionReason({ fileName, mimeType }),
+        name: fileName,
+        type: mimeType || "unknown",
+      });
       redirect("/dashboard/tenant?error=unsupported-attachment");
     }
+
+    console.log("ticket upload accepted", {
+      name: fileName,
+      type: mimeType || "unknown",
+    });
 
     if ("arrayBuffer" in photoFile && fileName && fileSize > 0) {
       const arrayBuffer = await photoFile.arrayBuffer();

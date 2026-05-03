@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  getRepairAttachmentRejectionReason,
+  isSupportedRepairAttachment,
+  normalizeRepairAttachmentMimeType,
+} from "@/lib/repair-attachment-validation";
 
 type SelectedUpload = {
   source: "camera" | "file";
@@ -25,11 +30,18 @@ function formatFileSize(size: number) {
 }
 
 function getUploadKind(file: File) {
-  if (file.type.startsWith("image/")) {
+  const mimeType = normalizeRepairAttachmentMimeType(file.type);
+  const fileName = file.name.toLowerCase();
+
+  if (
+    mimeType.startsWith("image/") ||
+    fileName.endsWith(".heic") ||
+    fileName.endsWith(".heif")
+  ) {
     return "photo";
   }
 
-  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+  if (mimeType === "application/pdf" || fileName.endsWith(".pdf")) {
     return "PDF";
   }
 
@@ -38,13 +50,16 @@ function getUploadKind(file: File) {
 
 function isCompressibleImage(file: File) {
   const name = file.name.toLowerCase();
+  const mimeType = normalizeRepairAttachmentMimeType(file.type);
 
   return (
-    file.type.startsWith("image/") &&
+    mimeType.startsWith("image/") &&
     !name.endsWith(".heic") &&
     !name.endsWith(".heif") &&
-    file.type !== "image/heic" &&
-    file.type !== "image/heif"
+    mimeType !== "image/heic" &&
+    mimeType !== "image/heif" &&
+    mimeType !== "image/heic-sequence" &&
+    mimeType !== "image/heif-sequence"
   );
 }
 
@@ -155,8 +170,31 @@ export function TenantRepairUploadFields() {
       return;
     }
 
+    console.log("ticket upload file selected", {
+      name: file.name,
+      type: normalizeRepairAttachmentMimeType(file.type) || "unknown",
+      size: file.size,
+    });
     setUploadError(null);
     setSelectedUpload(null);
+
+    if (!isSupportedRepairAttachment({ fileName: file.name, mimeType: file.type })) {
+      console.log("ticket upload rejected", {
+        reason: getRepairAttachmentRejectionReason({ fileName: file.name, mimeType: file.type }),
+        name: file.name,
+        type: normalizeRepairAttachmentMimeType(file.type) || "unknown",
+      });
+      clearOtherInput(source);
+      if (source === "camera" && cameraInputRef.current) {
+        cameraInputRef.current.value = "";
+      }
+
+      if (source === "file" && fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+      setUploadError("Upload a JPG, PNG, HEIC, HEIF, or PDF file for this repair ticket.");
+      return;
+    }
 
     let uploadFile = file;
 
@@ -167,6 +205,11 @@ export function TenantRepairUploadFields() {
     }
 
     if (uploadFile.size > MAX_UPLOAD_BYTES) {
+      console.log("ticket upload rejected", {
+        reason: "file-too-large",
+        name: uploadFile.name,
+        type: normalizeRepairAttachmentMimeType(uploadFile.type) || "unknown",
+      });
       clearOtherInput(source);
       if (source === "camera" && cameraInputRef.current) {
         cameraInputRef.current.value = "";
@@ -183,6 +226,11 @@ export function TenantRepairUploadFields() {
       return;
     }
 
+    console.log("ticket upload accepted", {
+      name: uploadFile.name,
+      type: normalizeRepairAttachmentMimeType(uploadFile.type) || "unknown",
+    });
+
     const activeInput = source === "camera" ? cameraInputRef.current : fileInputRef.current;
     const replacedInputFile = uploadFile === file || assignFileToInput(activeInput, uploadFile);
 
@@ -198,11 +246,13 @@ export function TenantRepairUploadFields() {
     setSelectedUpload({
       source,
       name: uploadFile.name || (source === "camera" ? "Camera photo" : "Selected file"),
-      type: uploadFile.type,
+      type: normalizeRepairAttachmentMimeType(uploadFile.type),
       size: uploadFile.size,
       originalSize: file.size,
       compressed: uploadFile.size < file.size,
-      previewUrl: uploadFile.type.startsWith("image/") ? URL.createObjectURL(uploadFile) : undefined,
+      previewUrl: normalizeRepairAttachmentMimeType(uploadFile.type).startsWith("image/")
+        ? URL.createObjectURL(uploadFile)
+        : undefined,
     });
   }
 

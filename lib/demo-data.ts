@@ -401,7 +401,8 @@ export function getRepairTicketAttachmentKind(input: {
     fileName.endsWith(".png") ||
     fileName.endsWith(".gif") ||
     fileName.endsWith(".webp") ||
-    fileName.endsWith(".heic")
+    fileName.endsWith(".heic") ||
+    fileName.endsWith(".heif")
   ) {
     return "image";
   }
