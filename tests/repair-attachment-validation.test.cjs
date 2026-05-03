@@ -45,6 +45,7 @@ test("repair attachment validation accepts iPhone HEIC and HEIF uploads", () => 
   assert.equal(isSupportedRepairAttachment({ fileName: "IMG_1004.HEIF", mimeType: "image/heif-sequence" }), true);
   assert.equal(isSupportedRepairAttachment({ fileName: "IMG_1005.HEIC", mimeType: "" }), true);
   assert.equal(isSupportedRepairAttachment({ fileName: "IMG_1006.HEIF", mimeType: "application/octet-stream" }), true);
+  assert.equal(isSupportedRepairAttachment({ fileName: "blob", mimeType: "application/octet-stream" }), true);
 });
 
 test("repair attachment validation keeps existing supported formats", () => {

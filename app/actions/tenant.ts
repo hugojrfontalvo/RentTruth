@@ -13,12 +13,24 @@ import {
 } from "@/lib/demo-data";
 import {
   getRepairAttachmentRejectionReason,
+  isIphoneBlobPhotoUpload,
   isSupportedRepairAttachment,
   normalizeRepairAttachmentMimeType,
 } from "@/lib/repair-attachment-validation";
 import { saveRepairAttachmentFile } from "@/lib/upload-storage";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+function getNormalizedRepairAttachmentName(input: {
+  fileName: string;
+  mimeType: string;
+}) {
+  if (isIphoneBlobPhotoUpload(input)) {
+    return `repair-photo-${Date.now()}.heic`;
+  }
+
+  return input.fileName;
+}
 
 function getUploadedRepairFile(formData: FormData) {
   const candidates = [
@@ -62,7 +74,8 @@ export async function submitTenantRepairRequest(formData: FormData) {
     const mimeType = normalizeRepairAttachmentMimeType(
       "type" in photoFile ? String(photoFile.type || "").trim() : "",
     );
-    photoPlaceholder = fileName || "No photo uploaded";
+    const normalizedFileName = getNormalizedRepairAttachmentName({ fileName, mimeType });
+    photoPlaceholder = normalizedFileName || fileName || "No photo uploaded";
 
     const fileSize = "size" in photoFile ? Number(photoFile.size) : 0;
     console.log("ticket upload file selected", {
@@ -86,6 +99,7 @@ export async function submitTenantRepairRequest(formData: FormData) {
         reason: getRepairAttachmentRejectionReason({ fileName, mimeType }),
         name: fileName,
         type: mimeType || "unknown",
+        size: fileSize,
       });
       redirect("/dashboard/tenant?error=unsupported-attachment");
     }
@@ -93,24 +107,25 @@ export async function submitTenantRepairRequest(formData: FormData) {
     console.log("ticket upload accepted", {
       name: fileName,
       type: mimeType || "unknown",
+      normalizedName: normalizedFileName,
     });
 
     if ("arrayBuffer" in photoFile && fileName && fileSize > 0) {
       const arrayBuffer = await photoFile.arrayBuffer();
       const safeMimeType = mimeType || "application/octet-stream";
       const savedFile = saveRepairAttachmentFile({
-        originalFileName: fileName,
+        originalFileName: normalizedFileName,
         mimeType: safeMimeType,
         bytes: Buffer.from(arrayBuffer),
       });
       attachment = createRepairTicketAttachment({
-        fileName,
+        fileName: normalizedFileName,
         mimeType: safeMimeType,
         dataUrl: savedFile.fileUrl,
       });
     } else if (fileName) {
       attachment = createRepairTicketAttachment({
-        fileName,
+        fileName: normalizedFileName,
         mimeType: mimeType || "application/octet-stream",
       });
     }

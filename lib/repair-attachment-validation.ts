@@ -31,12 +31,26 @@ export function normalizeRepairAttachmentMimeType(mimeType?: string | null) {
   return mimeType?.trim().toLowerCase() ?? "";
 }
 
+export function isIphoneBlobPhotoUpload(input: {
+  fileName?: string | null;
+  mimeType?: string | null;
+}) {
+  const mimeType = normalizeRepairAttachmentMimeType(input.mimeType);
+  const fileName = input.fileName?.trim().toLowerCase() ?? "";
+
+  return mimeType === "application/octet-stream" && fileName === "blob";
+}
+
 export function isSupportedRepairAttachment(input: {
   fileName?: string | null;
   mimeType?: string | null;
 }) {
   const mimeType = normalizeRepairAttachmentMimeType(input.mimeType);
   const extension = getRepairAttachmentExtension(input.fileName ?? "");
+
+  if (isIphoneBlobPhotoUpload(input)) {
+    return true;
+  }
 
   if (mimeType && SUPPORTED_REPAIR_ATTACHMENT_TYPES.has(mimeType)) {
     return true;
@@ -58,6 +72,10 @@ export function getRepairAttachmentRejectionReason(input: {
 
   if (!mimeType && !extension) {
     return "missing-type-and-extension";
+  }
+
+  if (isIphoneBlobPhotoUpload(input)) {
+    return "accepted-iphone-blob-photo";
   }
 
   if (mimeType && !SUPPORTED_REPAIR_ATTACHMENT_TYPES.has(mimeType)) {
