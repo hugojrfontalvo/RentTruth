@@ -210,6 +210,7 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
   const predictionTimeoutRef = useRef<number | null>(null);
   const suppressNextSearchRef = useRef(false);
   const selectionInProgressRef = useRef(false);
+  const hasUserTypedRef = useRef(false);
   const [inputValue, setInputValue] = useState(initialValue);
   const [predictions, setPredictions] = useState<GooglePrediction[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -222,6 +223,20 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
       ? "Loading Google address suggestions..."
       : "Google address suggestions are not connected in this environment. Use the manual fields below.",
   );
+
+  useEffect(() => {
+    hasUserTypedRef.current = false;
+    suppressNextSearchRef.current = true;
+    predictionRequestIdRef.current += 1;
+    if (predictionTimeoutRef.current) {
+      window.clearTimeout(predictionTimeoutRef.current);
+      predictionTimeoutRef.current = null;
+    }
+    setInputValue(initialValue);
+    setIsSearching(false);
+    setPredictions([]);
+    setIsDropdownOpen(false);
+  }, [initialValue]);
 
   useEffect(() => {
     if (!googleMapsApiKey || !placesContainerRef.current) {
@@ -287,7 +302,7 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
       return;
     }
 
-    if (trimmedInput.length < 3) {
+    if (!hasUserTypedRef.current || trimmedInput.length < 3) {
       if (predictionTimeoutRef.current) {
         window.clearTimeout(predictionTimeoutRef.current);
         predictionTimeoutRef.current = null;
@@ -454,7 +469,10 @@ export function GoogleAddressAutocomplete({ initialValue = "" }: GoogleAddressAu
         <input
           type="text"
           value={inputValue}
-          onChange={(event) => setInputValue(event.target.value)}
+          onChange={(event) => {
+            hasUserTypedRef.current = true;
+            setInputValue(event.target.value);
+          }}
           placeholder={isLive ? "Start typing an address" : "Manual entry remains available below"}
           autoComplete="off"
           inputMode="search"

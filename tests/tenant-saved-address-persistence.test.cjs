@@ -118,4 +118,7 @@ test("tenant saved address persists and renders after reload-style read", async 
   assert.match(markup, /33196/);
   assert.match(markup, /Edit \/ Change Address/);
   assert.doesNotMatch(markup, /Save your address first to verify the code/);
+  assert.doesNotMatch(markup, /Searching addresses/);
+  assert.doesNotMatch(markup, /Select a suggestion/);
+  assert.doesNotMatch(markup, /role="listbox"/);
 });
