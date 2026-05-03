@@ -109,11 +109,8 @@ export function TenantJoinFieldsClient({
   const [selectedPropertyType, setSelectedPropertyType] = useState<
     SavedTenantAddress["propertyType"]
   >(defaultPropertyType);
-  const [localSavedAddress, setLocalSavedAddress] = useState<SavedTenantAddress | null>(
-    serverSavedAddress,
-  );
   const [joinCode, setJoinCode] = useState(normalizeText(initialJoinCode).toUpperCase());
-  const savedAddress = localSavedAddress ?? serverSavedAddress;
+  const savedAddress = serverSavedAddress;
   const effectivePropertyType = savedAddress?.propertyType ?? selectedPropertyType;
   const helperValue = savedAddress
     ? `${savedAddress.streetAddress}, ${savedAddress.city}, ${savedAddress.state} ${savedAddress.zip}`
@@ -126,9 +123,11 @@ export function TenantJoinFieldsClient({
   const canRequestAccess = Boolean(savedAddress && isUnitReady && joinCode.trim());
 
   function handleSaveAddressClick(event: MouseEvent<HTMLButtonElement>) {
+    console.log("Save address clicked");
     const form = event.currentTarget.form;
 
     if (!form) {
+      event.preventDefault();
       return;
     }
 
@@ -138,25 +137,18 @@ export function TenantJoinFieldsClient({
     const state = normalizeText(formData.get("state")).toUpperCase();
     const zip = normalizeZip(formData.get("zip"));
     const unitNumber = normalizeText(formData.get("unitNumber")).toUpperCase();
-    const buildingNumber = normalizeText(formData.get("buildingNumber")).toUpperCase();
 
     if (!streetAddress || !city || !state || zip.length !== 5) {
+      event.preventDefault();
+      form.reportValidity();
       return;
     }
 
     if (propertyTypeRequiresUnit(selectedPropertyType) && !unitNumber) {
+      event.preventDefault();
+      form.reportValidity();
       return;
     }
-
-    setLocalSavedAddress({
-      streetAddress,
-      city,
-      state,
-      zip,
-      propertyType: selectedPropertyType,
-      unitNumber: propertyTypeRequiresUnit(selectedPropertyType) ? unitNumber : undefined,
-      buildingNumber: propertyTypeRequiresUnit(selectedPropertyType) ? buildingNumber || undefined : undefined,
-    });
   }
 
   return (
@@ -393,6 +385,7 @@ export function TenantJoinFieldsClient({
               type="submit"
               name="intent"
               value="save-address"
+              formNoValidate
               onClick={handleSaveAddressClick}
               className="min-h-[48px] w-full rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 sm:w-auto"
             >
