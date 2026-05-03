@@ -2,12 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
+import { readMessageAttachment } from "@/app/actions/message-attachments";
 import {
   addTenantTicketMessage,
   createRepairTicketAttachment,
   createTicketForTenant,
   findPropertyById,
   flushPersistentStore,
+  markTicketMessagesRead,
   propertyTypeRequiresUnit,
   tenantConfirmTicketOutcome,
 } from "@/lib/demo-data";
@@ -202,6 +204,7 @@ export async function tenantSendTicketMessageAction(formData: FormData) {
   const session = await requireApprovedTenantSession();
   const ticketId = String(formData.get("ticketId") ?? "").trim();
   const messageText = String(formData.get("message") ?? "").trim();
+  const attachment = await readMessageAttachment(formData);
 
   console.log("message send started", {
     ticketId,
@@ -212,6 +215,7 @@ export async function tenantSendTicketMessageAction(formData: FormData) {
     ticketId,
     tenantUserId: session.id,
     messageText,
+    attachment,
   });
   await flushPersistentStore();
 
@@ -224,4 +228,19 @@ export async function tenantSendTicketMessageAction(formData: FormData) {
   }
 
   return message;
+}
+
+export async function tenantMarkTicketMessagesReadAction(formData: FormData) {
+  const session = await requireApprovedTenantSession();
+  const ticketId = String(formData.get("ticketId") ?? "").trim();
+  const markedCount = markTicketMessagesRead(ticketId, "tenant");
+  await flushPersistentStore();
+  console.log("messages marked read", {
+    ticketId,
+    role: "tenant",
+    userId: session.id,
+    markedCount,
+  });
+
+  return { markedCount };
 }

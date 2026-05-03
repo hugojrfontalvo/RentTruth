@@ -5,6 +5,7 @@ import {
   createPropertyAction,
   deletePropertyAction,
   landlordCloseTicketAction,
+  landlordMarkTicketMessagesReadAction,
   landlordSendTicketMessageAction,
   updatePropertyAction,
 } from "@/app/actions/landlord";
@@ -104,7 +105,11 @@ function getUnreadTicketMessageCount(
   ticket: { messages?: RepairTicket["messages"] },
   role: "tenant" | "landlord",
 ) {
-  return (ticket.messages ?? []).filter((message) => message.senderRole !== role).length;
+  return (ticket.messages ?? []).filter(
+    (message) =>
+      message.senderRole !== role &&
+      !(message.readByRoles ?? []).includes(role),
+  ).length;
 }
 
 function getCreatePropertyErrorMessage(error?: string) {
@@ -573,9 +578,12 @@ export default async function LandlordDashboardPage({
                     {openTickets.length} open ticket{openTickets.length === 1 ? "" : "s"} need attention
                   </span>
                   {unreadMessageCount > 0 ? (
-                    <span className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100">
+                    <a
+                      href={primaryActiveTicket ? `#messages-${primaryActiveTicket.ticket.id}` : "#open-tickets"}
+                      className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100"
+                    >
                       {unreadMessageCount} unread message{unreadMessageCount === 1 ? "" : "s"}
-                    </span>
+                    </a>
                   ) : null}
                 </div>
                 <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/10">
@@ -642,9 +650,12 @@ export default async function LandlordDashboardPage({
                       {getTicketVendorLabel(primaryActiveTicket.ticket)}
                     </span>
                     {primaryActiveTicketUnreadMessages > 0 ? (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
+                      <a
+                        href={`#messages-${primaryActiveTicket.ticket.id}`}
+                        className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700"
+                      >
                         {primaryActiveTicketUnreadMessages} unread
-                      </span>
+                      </a>
                     ) : null}
                   </div>
                   {primaryActiveTicketLatestMessage ? (
@@ -665,6 +676,39 @@ export default async function LandlordDashboardPage({
                   View ticket
                 </a>
               </div>
+            </section>
+          ) : null}
+
+          {primaryActiveTicket ? (
+            <section className="mt-6 rounded-[26px] border border-sky-200 bg-white/95 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[32px] sm:p-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">
+                    Messages
+                  </p>
+                  <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
+                    Ticket chat needing attention
+                  </h2>
+                </div>
+                {unreadMessageCount > 0 ? (
+                  <a
+                    href={`#messages-${primaryActiveTicket.ticket.id}`}
+                    className="min-h-[44px] rounded-full border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm font-semibold text-amber-800"
+                  >
+                    Jump to {unreadMessageCount} unread
+                  </a>
+                ) : null}
+              </div>
+              <TicketMessageThread
+                ticketId={primaryActiveTicket.ticket.id}
+                currentRole="landlord"
+                ticketTitle={primaryActiveTicket.ticket.issueTitle}
+                ticketStatus={primaryActiveTicket.ticket.status}
+                ticketCreatedAt={primaryActiveTicket.ticket.submittedAt}
+                vendorLabel={getTicketVendorLabel(primaryActiveTicket.ticket)}
+                sendMessageAction={landlordSendTicketMessageAction}
+                markReadAction={landlordMarkTicketMessagesReadAction}
+              />
             </section>
           ) : null}
 
@@ -1729,11 +1773,18 @@ export default async function LandlordDashboardPage({
                               </div>
                             ) : null}
 
-                            <TicketMessageThread
-                              ticketId={ticket.id}
-                              currentRole="landlord"
-                              sendMessageAction={landlordSendTicketMessageAction}
-                            />
+                            {ticket.id !== primaryActiveTicket?.ticket.id ? (
+                              <TicketMessageThread
+                                ticketId={ticket.id}
+                                currentRole="landlord"
+                                ticketTitle={ticket.issueTitle}
+                                ticketStatus={ticket.status}
+                                ticketCreatedAt={ticket.submittedAt}
+                                vendorLabel={getTicketVendorLabel(ticket)}
+                                sendMessageAction={landlordSendTicketMessageAction}
+                                markReadAction={landlordMarkTicketMessagesReadAction}
+                              />
+                            ) : null}
                           </div>
 
                           <div className="w-full max-w-full min-w-0 xl:w-[380px] 2xl:w-[420px]">

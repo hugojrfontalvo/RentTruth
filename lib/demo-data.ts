@@ -127,6 +127,8 @@ export type TicketMessage = {
   senderRole: "tenant" | "landlord";
   text: string;
   createdAt: string;
+  readByRoles?: Array<"tenant" | "landlord">;
+  attachment?: RepairTicketAttachment | null;
 };
 
 export type RepairApprovalRequestStatus =
@@ -3434,15 +3436,51 @@ export function getTicketMessages(ticketId: string) {
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
+export function getTicketUnreadMessageCount(ticketId: string, role: "tenant" | "landlord") {
+  return getTicketMessages(ticketId).filter(
+    (message) =>
+      message.senderRole !== role &&
+      !(message.readByRoles ?? []).includes(role),
+  ).length;
+}
+
+export function markTicketMessagesRead(ticketId: string, role: "tenant" | "landlord") {
+  const ticket = findTicketById(ticketId);
+
+  if (!ticket) {
+    return 0;
+  }
+
+  let markedCount = 0;
+  ticket.messages = (ticket.messages ?? []).map((message) => {
+    if (message.senderRole === role || (message.readByRoles ?? []).includes(role)) {
+      return message;
+    }
+
+    markedCount += 1;
+    return {
+      ...message,
+      readByRoles: [...(message.readByRoles ?? []), role],
+    };
+  });
+
+  if (markedCount > 0) {
+    persistStore();
+  }
+
+  return markedCount;
+}
+
 export function addTenantTicketMessage(input: {
   ticketId: string;
   tenantUserId: string;
   messageText: string;
+  attachment?: RepairTicketAttachment | null;
 }) {
   const ticket = findTicketById(input.ticketId);
   const text = input.messageText.trim();
 
-  if (!ticket || ticket.tenantUserId !== input.tenantUserId || !text) {
+  if (!ticket || ticket.tenantUserId !== input.tenantUserId || (!text && !input.attachment)) {
     return null;
   }
 
@@ -3451,8 +3489,10 @@ export function addTenantTicketMessage(input: {
     ticketId: ticket.id,
     senderUserId: input.tenantUserId,
     senderRole: "tenant",
-    text,
+    text: text || "Attachment",
     createdAt: getNowIso(),
+    readByRoles: ["tenant"],
+    attachment: input.attachment ?? null,
   };
 
   ticket.messages = [...(ticket.messages ?? []), message];
@@ -3464,12 +3504,13 @@ export function addLandlordTicketMessage(input: {
   ticketId: string;
   landlordUserId: string;
   messageText: string;
+  attachment?: RepairTicketAttachment | null;
 }) {
   const ticket = findTicketById(input.ticketId);
   const property = ticket ? findPropertyById(ticket.propertyId) : null;
   const text = input.messageText.trim();
 
-  if (!ticket || property?.landlordId !== input.landlordUserId || !text) {
+  if (!ticket || property?.landlordId !== input.landlordUserId || (!text && !input.attachment)) {
     return null;
   }
 
@@ -3478,8 +3519,10 @@ export function addLandlordTicketMessage(input: {
     ticketId: ticket.id,
     senderUserId: input.landlordUserId,
     senderRole: "landlord",
-    text,
+    text: text || "Attachment",
     createdAt: getNowIso(),
+    readByRoles: ["landlord"],
+    attachment: input.attachment ?? null,
   };
 
   ticket.messages = [...(ticket.messages ?? []), message];

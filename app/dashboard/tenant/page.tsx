@@ -7,6 +7,7 @@ import {
 import {
   submitTenantRepairRequest,
   tenantConfirmRepairFixedAction,
+  tenantMarkTicketMessagesReadAction,
   tenantReportRepairStillBrokenAction,
   tenantSendTicketMessageAction,
 } from "@/app/actions/tenant";
@@ -125,7 +126,11 @@ function getLatestTicketMessage(ticket: RepairTicket) {
 }
 
 function getUnreadTicketMessageCount(ticket: RepairTicket, role: "tenant" | "landlord") {
-  return (ticket.messages ?? []).filter((message) => message.senderRole !== role).length;
+  return (ticket.messages ?? []).filter(
+    (message) =>
+      message.senderRole !== role &&
+      !(message.readByRoles ?? []).includes(role),
+  ).length;
 }
 
 function getTicketNextStep(ticket: RepairTicket) {
@@ -194,9 +199,12 @@ function ActiveTicketSummary({ ticket }: { ticket: RepairTicket }) {
               {ticket.urgent ? "Urgent" : "Standard"}
             </span>
             {unreadMessages > 0 ? (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+              <a
+                href={`#messages-${ticket.id}`}
+                className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700"
+              >
                 {unreadMessages} unread
-              </span>
+              </a>
             ) : null}
           </div>
         </div>
@@ -367,6 +375,7 @@ export default async function TenantDashboardPage({
   const tickets = Array.isArray(ticketsData) ? ticketsData : [];
   console.log("tenant tickets loaded", { count: tickets.length });
   const activeTickets = tickets.filter(isActiveTicket);
+  const primaryMessageTicket = activeTickets[0] ?? tickets[0] ?? null;
   const tenantConfirmationTickets = tickets.filter(
     (ticket) => ticket.status === "Waiting for tenant confirmation",
   );
@@ -461,9 +470,12 @@ export default async function TenantDashboardPage({
                     You have {openTickets} open ticket{openTickets === 1 ? "" : "s"}
                   </span>
                   {unreadMessageCount > 0 ? (
-                    <span className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100">
+                    <a
+                      href={primaryMessageTicket ? `#messages-${primaryMessageTicket.id}` : "#ticket-history"}
+                      className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100"
+                    >
                       You have {unreadMessageCount} unread message{unreadMessageCount === 1 ? "" : "s"}
-                    </span>
+                    </a>
                   ) : null}
                   <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
                     {property ? getPropertyDisplayName(property) : "No property linked yet"}
@@ -507,7 +519,7 @@ export default async function TenantDashboardPage({
                     {tenantConfirmationTickets.length}
                   </p>
                 </a>
-                <a href="#ticket-history" className="rounded-2xl bg-white/8 p-3 transition hover:bg-white/12 sm:rounded-3xl sm:p-5">
+                <a href={primaryMessageTicket ? `#messages-${primaryMessageTicket.id}` : "#ticket-history"} className="rounded-2xl bg-white/8 p-3 transition hover:bg-white/12 sm:rounded-3xl sm:p-5">
                   <p className="text-sm text-white/55">Unread</p>
                   <p className="mt-2 font-display text-2xl font-semibold sm:text-3xl">{unreadMessageCount}</p>
                 </a>
@@ -609,6 +621,45 @@ export default async function TenantDashboardPage({
                   <ActiveTicketSummary key={`priority-${ticket.id}`} ticket={ticket} />
                 ))}
               </div>
+            </section>
+          ) : null}
+
+          {primaryMessageTicket ? (
+            <section className="mt-6 rounded-[26px] border border-sky-200 bg-white/95 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[32px] sm:p-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">
+                    Messages
+                  </p>
+                  <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
+                    Latest ticket chat
+                  </h2>
+                </div>
+                {unreadMessageCount > 0 ? (
+                  <a
+                    href={`#messages-${primaryMessageTicket.id}`}
+                    className="min-h-[44px] rounded-full border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm font-semibold text-amber-800"
+                  >
+                    Jump to {unreadMessageCount} unread
+                  </a>
+                ) : null}
+              </div>
+              <TicketMessageThread
+                ticketId={primaryMessageTicket.id}
+                currentRole="tenant"
+                ticketTitle={primaryMessageTicket.issueTitle}
+                ticketStatus={primaryMessageTicket.status}
+                ticketCreatedAt={primaryMessageTicket.submittedAt}
+                vendorLabel={
+                  primaryMessageTicket.vendorBusinessName
+                    ? `Vendor assigned: ${primaryMessageTicket.vendorBusinessName}`
+                    : primaryMessageTicket.landlordVendorName
+                      ? `Vendor assigned: ${primaryMessageTicket.landlordVendorName}`
+                      : undefined
+                }
+                sendMessageAction={tenantSendTicketMessageAction}
+                markReadAction={tenantMarkTicketMessagesReadAction}
+              />
             </section>
           ) : null}
 
@@ -911,11 +962,24 @@ export default async function TenantDashboardPage({
                       </div>
                     ) : null}
 
-                    <TicketMessageThread
-                      ticketId={ticket.id}
-                      currentRole="tenant"
-                      sendMessageAction={tenantSendTicketMessageAction}
-                    />
+                    {ticket.id !== primaryMessageTicket?.id ? (
+                      <TicketMessageThread
+                        ticketId={ticket.id}
+                        currentRole="tenant"
+                        ticketTitle={ticket.issueTitle}
+                        ticketStatus={ticket.status}
+                        ticketCreatedAt={ticket.submittedAt}
+                        vendorLabel={
+                          ticket.vendorBusinessName
+                            ? `Vendor assigned: ${ticket.vendorBusinessName}`
+                            : ticket.landlordVendorName
+                              ? `Vendor assigned: ${ticket.landlordVendorName}`
+                              : undefined
+                        }
+                        sendMessageAction={tenantSendTicketMessageAction}
+                        markReadAction={tenantMarkTicketMessagesReadAction}
+                      />
+                    ) : null}
                   </article>
                 ))}
 

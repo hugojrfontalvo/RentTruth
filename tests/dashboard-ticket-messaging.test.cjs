@@ -57,7 +57,11 @@ function isOpenTicket(ticket) {
 }
 
 function unreadCount(ticket, role) {
-  return (ticket.messages ?? []).filter((message) => message.senderRole !== role).length;
+  return (ticket.messages ?? []).filter(
+    (message) =>
+      message.senderRole !== role &&
+      !(message.readByRoles ?? []).includes(role),
+  ).length;
 }
 
 test("tenant and landlord active ticket queues and unread counts update with messages", () => {
@@ -69,6 +73,7 @@ test("tenant and landlord active ticket queues and unread counts update with mes
     createUser,
     getTicketsForProperty,
     getTicketsForTenant,
+    markTicketMessagesRead,
     updateTenantMembershipStatus,
   } = require("../lib/demo-data.ts");
 
@@ -127,6 +132,8 @@ test("tenant and landlord active ticket queues and unread counts update with mes
 
   assert.equal(unreadCount(ticketAfterLandlordMessage, "tenant"), 1);
   assert.equal(unreadCount(ticketAfterLandlordMessage, "landlord"), 0);
+  assert.equal(markTicketMessagesRead(ticket.id, "tenant"), 1);
+  assert.equal(unreadCount(getTicketsForTenant(tenant.id)[0], "tenant"), 0);
 
   addTenantTicketMessage({
     ticketId: ticket.id,
@@ -135,8 +142,10 @@ test("tenant and landlord active ticket queues and unread counts update with mes
   });
   const ticketAfterTenantReply = getTicketsForProperty(property.id)[0];
 
-  assert.equal(unreadCount(ticketAfterTenantReply, "tenant"), 1);
+  assert.equal(unreadCount(ticketAfterTenantReply, "tenant"), 0);
   assert.equal(unreadCount(ticketAfterTenantReply, "landlord"), 1);
+  assert.equal(markTicketMessagesRead(ticket.id, "landlord"), 1);
+  assert.equal(unreadCount(getTicketsForProperty(property.id)[0], "landlord"), 0);
 });
 
 test("ticket message form renders as no-page-reload client flow", () => {
@@ -148,13 +157,20 @@ test("ticket message form renders as no-page-reload client flow", () => {
     React.createElement(TicketMessageThreadClient, {
       ticketId: "ticket-test",
       currentRole: "tenant",
+      ticketTitle: "AC not cooling",
+      ticketStatus: "Open",
+      ticketCreatedAt: "Today",
       initialMessages: [],
       sendMessageAction: async () => null,
+      markReadAction: async () => ({ markedCount: 0 }),
     }),
   );
 
   assert.match(markup, /data-no-page-reload="true"/);
+  assert.match(markup, /Ticket chat/);
+  assert.match(markup, /Timeline/);
   assert.match(markup, /Send Message/);
+  assert.match(markup, /Attach photo or PDF/);
   assert.match(markup, /Write a message about this ticket/);
 });
 
@@ -166,9 +182,11 @@ test("dashboard source keeps active ticket sections above lower ticket history/t
     tenantPage.indexOf('id="active-tickets"') < tenantPage.indexOf('id="maintenance-request"'),
     "tenant active tickets should render before lower tenant tools",
   );
+  assert.ok(tenantPage.includes("href={`#messages-${primaryMessageTicket.id}`}"));
   assert.ok(
     landlordPage.indexOf("Active ticket needs attention") <
       landlordPage.indexOf("Create your first property"),
     "landlord active ticket shortcut should render near the top before setup sections",
   );
+  assert.ok(landlordPage.includes("href={`#messages-${primaryActiveTicket.ticket.id}`}"));
 });

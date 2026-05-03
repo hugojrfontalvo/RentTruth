@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getSession } from "@/app/actions/auth";
+import { readMessageAttachment } from "@/app/actions/message-attachments";
 import {
   addLandlordTicketMessage,
   createPropertyForLandlord,
@@ -10,6 +11,7 @@ import {
   isValidNormalizedZip,
   isPropertyType,
   landlordCloseTicket,
+  markTicketMessagesRead,
   normalizeZipCode,
   updatePropertyForLandlord,
 } from "@/lib/demo-data";
@@ -199,6 +201,7 @@ export async function landlordSendTicketMessageAction(formData: FormData) {
 
   const ticketId = String(formData.get("ticketId") ?? "").trim();
   const messageText = String(formData.get("message") ?? "").trim();
+  const attachment = await readMessageAttachment(formData);
 
   console.log("message send started", {
     ticketId,
@@ -209,6 +212,7 @@ export async function landlordSendTicketMessageAction(formData: FormData) {
     ticketId,
     landlordUserId: session.id,
     messageText,
+    attachment,
   });
   await flushPersistentStore();
 
@@ -221,4 +225,24 @@ export async function landlordSendTicketMessageAction(formData: FormData) {
   }
 
   return message;
+}
+
+export async function landlordMarkTicketMessagesReadAction(formData: FormData) {
+  const session = await getSession();
+
+  if (!session || session.role !== "landlord") {
+    redirect("/login");
+  }
+
+  const ticketId = String(formData.get("ticketId") ?? "").trim();
+  const markedCount = markTicketMessagesRead(ticketId, "landlord");
+  await flushPersistentStore();
+  console.log("messages marked read", {
+    ticketId,
+    role: "landlord",
+    userId: session.id,
+    markedCount,
+  });
+
+  return { markedCount };
 }
