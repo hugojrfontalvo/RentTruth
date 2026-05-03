@@ -200,12 +200,25 @@ export async function landlordSendTicketMessageAction(formData: FormData) {
   const ticketId = String(formData.get("ticketId") ?? "").trim();
   const messageText = String(formData.get("message") ?? "").trim();
 
-  addLandlordTicketMessage({
+  console.log("message send started", {
+    ticketId,
+    senderRole: "landlord",
+    userId: session.id,
+  });
+  const message = addLandlordTicketMessage({
     ticketId,
     landlordUserId: session.id,
     messageText,
   });
   await flushPersistentStore();
 
-  redirect("/dashboard/landlord?message=sent");
+  if (message) {
+    console.log("message send successful", {
+      ticketId,
+      messageId: message.id,
+      senderRole: "landlord",
+    });
+  }
+
+  return message;
 }

@@ -34,6 +34,7 @@ import { TicketMessageThread } from "@/components/ticket-message-thread";
 import { getAbsoluteAppUrl } from "@/lib/app-url";
 import { roleLabels } from "@/lib/auth";
 import {
+  type RepairTicket,
   getAddressSuggestions,
   getApprovedTenantsForProperty,
   getPendingTenantsForProperty,
@@ -91,6 +92,19 @@ function getTicketVendorLabel(ticket: { vendorBusinessName?: string; landlordVen
   }
 
   return "Vendor selection needed";
+}
+
+function getLatestTicketMessage(ticket: { messages?: RepairTicket["messages"] }) {
+  return (ticket.messages ?? [])
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null;
+}
+
+function getUnreadTicketMessageCount(
+  ticket: { messages?: RepairTicket["messages"] },
+  role: "tenant" | "landlord",
+) {
+  return (ticket.messages ?? []).filter((message) => message.senderRole !== role).length;
 }
 
 function getCreatePropertyErrorMessage(error?: string) {
@@ -443,6 +457,18 @@ export default async function LandlordDashboardPage({
     openTicketQueue.find(({ ticket }) => ticket.urgent) ??
     openTicketQueue[0] ??
     null;
+  console.log("active tickets loaded", { role: "landlord", count: openTicketQueue.length });
+  const unreadMessageCount = allTickets.reduce(
+    (count, ticket) => count + getUnreadTicketMessageCount(ticket, "landlord"),
+    0,
+  );
+  console.log("unread message count loaded", { role: "landlord", count: unreadMessageCount });
+  const primaryActiveTicketLatestMessage = primaryActiveTicket
+    ? getLatestTicketMessage(primaryActiveTicket.ticket)
+    : null;
+  const primaryActiveTicketUnreadMessages = primaryActiveTicket
+    ? getUnreadTicketMessageCount(primaryActiveTicket.ticket, "landlord")
+    : 0;
   const summaryCards = [
     {
       title: "Open tickets",
@@ -463,10 +489,10 @@ export default async function LandlordDashboardPage({
       href: "#vendor-selection-needed",
     },
     {
-      title: "Payment review",
-      value: String(tenantConfirmationQueue.length),
-      detail: "Ready after tenant confirmation",
-      href: "#payment-review",
+      title: "Unread messages",
+      value: String(unreadMessageCount),
+      detail: "Tenant replies across tickets",
+      href: primaryActiveTicket ? `#ticket-${primaryActiveTicket.ticket.id}` : "#open-tickets",
     },
   ] as const;
 
@@ -542,6 +568,16 @@ export default async function LandlordDashboardPage({
                     {totalPendingApprovals} pending approvals
                   </a>
                 </div>
+                <div className="mt-4 flex flex-wrap gap-2 text-sm">
+                  <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
+                    {openTickets.length} open ticket{openTickets.length === 1 ? "" : "s"} need attention
+                  </span>
+                  {unreadMessageCount > 0 ? (
+                    <span className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100">
+                      {unreadMessageCount} unread message{unreadMessageCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/10">
                   <div className="h-full w-[82%] rounded-full bg-gradient-to-r from-cyan via-sky-400 to-emerald-400" />
                 </div>
@@ -605,7 +641,21 @@ export default async function LandlordDashboardPage({
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
                       {getTicketVendorLabel(primaryActiveTicket.ticket)}
                     </span>
+                    {primaryActiveTicketUnreadMessages > 0 ? (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
+                        {primaryActiveTicketUnreadMessages} unread
+                      </span>
+                    ) : null}
                   </div>
+                  {primaryActiveTicketLatestMessage ? (
+                    <div className="mt-4 rounded-[22px] border border-sky-100 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+                      <span className="font-semibold text-slate-900">
+                        Latest message from{" "}
+                        {primaryActiveTicketLatestMessage.senderRole === "landlord" ? "you" : "tenant"}:
+                      </span>{" "}
+                      <span className="break-words">{primaryActiveTicketLatestMessage.text}</span>
+                    </div>
+                  ) : null}
                 </div>
 
                 <a

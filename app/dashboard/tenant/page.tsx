@@ -118,6 +118,16 @@ function isActiveTicket(ticket: RepairTicket) {
   );
 }
 
+function getLatestTicketMessage(ticket: RepairTicket) {
+  return (ticket.messages ?? [])
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null;
+}
+
+function getUnreadTicketMessageCount(ticket: RepairTicket, role: "tenant" | "landlord") {
+  return (ticket.messages ?? []).filter((message) => message.senderRole !== role).length;
+}
+
 function getTicketNextStep(ticket: RepairTicket) {
   if (ticket.status === "Open" || ticket.status === "Open to vendors") {
     return "Waiting for landlord review or vendor interest.";
@@ -154,6 +164,8 @@ function getTicketNextStep(ticket: RepairTicket) {
 
 function ActiveTicketSummary({ ticket }: { ticket: RepairTicket }) {
   const property = findPropertyById(ticket.propertyId);
+  const latestMessage = getLatestTicketMessage(ticket);
+  const unreadMessages = getUnreadTicketMessageCount(ticket, "tenant");
 
   return (
     <article className="rounded-[24px] border border-sky-200 bg-white p-4 shadow-lg shadow-slate-200/70 sm:rounded-[28px] sm:p-5">
@@ -181,6 +193,11 @@ function ActiveTicketSummary({ ticket }: { ticket: RepairTicket }) {
             >
               {ticket.urgent ? "Urgent" : "Standard"}
             </span>
+            {unreadMessages > 0 ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">
+                {unreadMessages} unread
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -193,6 +210,14 @@ function ActiveTicketSummary({ ticket }: { ticket: RepairTicket }) {
       <div className="mt-5 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
         <span className="font-semibold text-slate-900">Next:</span> {getTicketNextStep(ticket)}
       </div>
+      {latestMessage ? (
+        <div className="mt-3 rounded-[22px] border border-sky-100 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+          <span className="font-semibold text-slate-900">
+            Latest message from {latestMessage.senderRole === "tenant" ? "you" : "landlord"}:
+          </span>{" "}
+          <span className="break-words">{latestMessage.text}</span>
+        </div>
+      ) : null}
       {property ? (
         <div className="mt-3 rounded-[22px] border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-800">
           <span className="font-semibold">Service location:</span>{" "}
@@ -346,12 +371,12 @@ export default async function TenantDashboardPage({
     (ticket) => ticket.status === "Waiting for tenant confirmation",
   );
   const openTickets = activeTickets.length;
-  const resolvedTickets = tickets.filter(
-    (ticket) =>
-      ticket.status === "Closed" ||
-      ticket.status === "Ready for landlord payment approval" ||
-      ticket.status === "Tenant confirmed fixed",
-  ).length;
+  console.log("active tickets loaded", { role: "tenant", count: activeTickets.length });
+  const unreadMessageCount = tickets.reduce(
+    (count, ticket) => count + getUnreadTicketMessageCount(ticket, "tenant"),
+    0,
+  );
+  console.log("unread message count loaded", { role: "tenant", count: unreadMessageCount });
   const membershipMessage =
     getMembershipActionMessage(params.membership) ??
     (canJoinProperty
@@ -432,6 +457,14 @@ export default async function TenantDashboardPage({
                 </p>
                 <SupportEntryButtons className="mt-6" />
                 <div className="mt-6 flex flex-wrap gap-3 text-sm">
+                  <span className="rounded-full bg-sky-400/15 px-4 py-2 text-sky-100">
+                    You have {openTickets} open ticket{openTickets === 1 ? "" : "s"}
+                  </span>
+                  {unreadMessageCount > 0 ? (
+                    <span className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100">
+                      You have {unreadMessageCount} unread message{unreadMessageCount === 1 ? "" : "s"}
+                    </span>
+                  ) : null}
                   <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
                     {property ? getPropertyDisplayName(property) : "No property linked yet"}
                   </span>
@@ -475,8 +508,8 @@ export default async function TenantDashboardPage({
                   </p>
                 </a>
                 <a href="#ticket-history" className="rounded-2xl bg-white/8 p-3 transition hover:bg-white/12 sm:rounded-3xl sm:p-5">
-                  <p className="text-sm text-white/55">Resolved</p>
-                  <p className="mt-2 font-display text-2xl font-semibold sm:text-3xl">{resolvedTickets}</p>
+                  <p className="text-sm text-white/55">Unread</p>
+                  <p className="mt-2 font-display text-2xl font-semibold sm:text-3xl">{unreadMessageCount}</p>
                 </a>
               </div>
             </div>

@@ -8,6 +8,7 @@
     "test:address-flow": "node --test tests/address-mismatch-flow.test.cjs",
     "test:tenant-address": "node --test tests/tenant-saved-address-persistence.test.cjs",
     "test:repair-attachments": "node --test tests/repair-attachment-validation.test.cjs",
+    "test:dashboard-messaging": "node --test tests/dashboard-ticket-messaging.test.cjs",
     "start": "next start",
     "lint": "next lint"
   },

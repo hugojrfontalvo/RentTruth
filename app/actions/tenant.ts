@@ -203,12 +203,25 @@ export async function tenantSendTicketMessageAction(formData: FormData) {
   const ticketId = String(formData.get("ticketId") ?? "").trim();
   const messageText = String(formData.get("message") ?? "").trim();
 
-  addTenantTicketMessage({
+  console.log("message send started", {
+    ticketId,
+    senderRole: "tenant",
+    userId: session.id,
+  });
+  const message = addTenantTicketMessage({
     ticketId,
     tenantUserId: session.id,
     messageText,
   });
   await flushPersistentStore();
 
-  redirect("/dashboard/tenant?message=sent#ticket-history");
+  if (message) {
+    console.log("message send successful", {
+      ticketId,
+      messageId: message.id,
+      senderRole: "tenant",
+    });
+  }
+
+  return message;
 }
