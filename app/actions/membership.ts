@@ -156,14 +156,17 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
         }
       : null;
 
-  console.log("tenant saved address loaded", {
-    tenantUserId: session.id,
+  console.log("tenant address load started", {
+    userId: session.id,
+  });
+  console.log(savedAddressRecord ? "tenant address loaded" : "tenant address missing", {
+    userId: session.id,
     hasSavedAddress: Boolean(savedAddressRecord),
   });
 
   if (intent === "save-address") {
     console.log("tenant address save started", {
-      tenantUserId: session.id,
+      userId: session.id,
       streetAddress,
       city,
       state,
@@ -198,7 +201,7 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
     });
     await flushPersistentStore();
     console.log("tenant address saved successfully", {
-      tenantUserId: session.id,
+      userId: session.id,
       streetAddress,
       city,
       state,

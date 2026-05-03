@@ -295,6 +295,7 @@ export default async function TenantDashboardPage({
   const tenantId = session.id;
   const tenantName = session.name?.trim() || session.email || "Tenant";
   const property = session.propertyId ? findPropertyById(session.propertyId) : null;
+  console.log("tenant address load started", { userId: session.id });
   const savedAddressRecord = getSavedTenantAddress({
     savedStreetAddress: session.savedStreetAddress,
     savedCity: session.savedCity,
@@ -304,13 +305,10 @@ export default async function TenantDashboardPage({
     unitNumber: session.unitNumber,
     buildingNumber: session.buildingNumber,
   });
-  console.log(
-    savedAddressRecord ? "tenant saved address loaded" : "tenant saved address missing",
-    {
-      tenantUserId: session.id,
-      hasSavedAddress: Boolean(savedAddressRecord),
-    },
-  );
+  console.log(savedAddressRecord ? "tenant address loaded" : "tenant address missing", {
+    userId: session.id,
+    hasSavedAddress: Boolean(savedAddressRecord),
+  });
   const savedAddress = savedAddressRecord ? formatTenantAddress(savedAddressRecord) : "";
   const savedAddressMatch =
     !property && savedAddressRecord ? findPropertyBySavedAddress(savedAddressRecord) : null;

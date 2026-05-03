@@ -3015,6 +3015,9 @@ export function saveTenantAddress(userId: string, address: SavedTenantAddress) {
     message: `${user.email} saved tenant address ${user.savedAddress}.`,
   });
   persistStore();
+  void upsertDatabaseUser(user).catch((error) => {
+    console.error("RentTruth tenant saved address user row could not be synced.", error);
+  });
   return user;
 }
 
