@@ -2539,6 +2539,14 @@ export function getUsers() {
 }
 
 export async function findUserByIdPersisted(userId: string) {
+  await hydratePersistentStore();
+
+  const storeUser = findUserById(userId);
+
+  if (storeUser) {
+    return storeUser;
+  }
+
   if (isDatabasePersistenceEnabled()) {
     const user = await readDatabaseUserById(userId);
 
@@ -2547,8 +2555,7 @@ export async function findUserByIdPersisted(userId: string) {
     }
   }
 
-  await hydratePersistentStore();
-  return findUserById(userId);
+  return null;
 }
 
 export async function findUserByEmailPersisted(email: string) {
@@ -2892,6 +2899,9 @@ export function updateTenantMembershipStatus(userId: string, status: MembershipS
     message: `${user.email} membership status changed to ${status}.`,
   });
   persistStore();
+  void upsertDatabaseUser(user).catch((error) => {
+    console.error("RentTruth tenant membership user row could not be synced.", error);
+  });
   return user;
 }
 
@@ -2936,6 +2946,9 @@ export function setTenantMembershipRequest(input: {
     message: `${user.email} requested access to property ${input.propertyId}.`,
   });
   persistStore();
+  void upsertDatabaseUser(user).catch((error) => {
+    console.error("RentTruth tenant saved address user row could not be synced.", error);
+  });
   return user;
 }
 
