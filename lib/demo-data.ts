@@ -1928,6 +1928,30 @@ function getUnitBuildingSegment(input: { unitNumber?: string; buildingNumber?: s
   return parts.length > 0 ? `, ${parts.join(" ")}` : "";
 }
 
+function normalizeUnitValue(value?: string) {
+  return (value ?? "")
+    .trim()
+    .replace(/^(apartment|apt|unit|suite|ste|#)\s+/i, "")
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeBuildingValue(value?: string) {
+  return (value ?? "")
+    .trim()
+    .replace(/^(building|bldg|bld)\s+/i, "")
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeOptionalUnitValue(value?: string) {
+  return normalizeUnitValue(value) || undefined;
+}
+
+function normalizeOptionalBuildingValue(value?: string) {
+  return normalizeBuildingValue(value) || undefined;
+}
+
 export function getPropertyFullAddress(property: Property) {
   const unitSegment =
     propertyTypeRequiresUnit(property.propertyType)
@@ -2612,7 +2636,8 @@ export function createUser(input: CreateUserInput, options: CreateUserOptions = 
     savedZip: input.savedZip ? normalizeZipCode(input.savedZip) : undefined,
     savedPropertyType: input.savedPropertyType,
     propertyId: input.propertyId,
-    unitNumber: input.unitNumber,
+    unitNumber: normalizeOptionalUnitValue(input.unitNumber),
+    buildingNumber: normalizeOptionalBuildingValue(input.buildingNumber),
     membershipStatus: input.membershipStatus,
     membershipRequestedAt: input.membershipRequestedAt,
     tenantVerificationLevel:
@@ -2849,8 +2874,10 @@ export function setTenantMembershipRequest(input: {
   user.savedState = input.savedState?.trim().toUpperCase() || user.savedState;
   user.savedZip = input.savedZip ? normalizeZipCode(input.savedZip) : user.savedZip;
   user.savedPropertyType = input.savedPropertyType ?? user.savedPropertyType;
-  user.unitNumber = input.unitNumber;
-  user.buildingNumber = input.buildingNumber;
+  user.unitNumber = input.unitNumber ? normalizeOptionalUnitValue(input.unitNumber) : undefined;
+  user.buildingNumber = input.buildingNumber
+    ? normalizeOptionalBuildingValue(input.buildingNumber)
+    : undefined;
   user.membershipStatus = "Pending";
   user.membershipRequestedAt = input.requestedAt;
   recordActivity({
@@ -2908,10 +2935,10 @@ export function saveTenantAddress(userId: string, address: SavedTenantAddress) {
   user.savedZip = normalizeZipCode(address.zip);
   user.savedPropertyType = address.propertyType;
   user.unitNumber = propertyTypeRequiresUnit(address.propertyType)
-    ? address.unitNumber?.trim().toUpperCase()
+    ? normalizeOptionalUnitValue(address.unitNumber)
     : undefined;
   user.buildingNumber = propertyTypeRequiresUnit(address.propertyType)
-    ? address.buildingNumber?.trim().toUpperCase()
+    ? normalizeOptionalBuildingValue(address.buildingNumber)
     : undefined;
   user.savedAddress = formatTenantAddress({
     ...address,
@@ -2998,6 +3025,19 @@ function baseAddressMatches(
   input: Pick<SavedTenantAddress, "streetAddress" | "city" | "state" | "zip">,
 ) {
   return (
+    property.streetAddress.trim().replace(/\s+/g, " ").toLowerCase() ===
+      input.streetAddress.trim().replace(/\s+/g, " ").toLowerCase() &&
+    property.city.trim().toLowerCase() === input.city.trim().toLowerCase() &&
+    property.state.trim().toLowerCase() === input.state.trim().toLowerCase() &&
+    normalizeZipCode(property.zip) === normalizeZipCode(input.zip)
+  );
+}
+
+function closeBaseAddressMatches(
+  property: Pick<Property, "streetAddress" | "city" | "state" | "zip">,
+  input: Pick<SavedTenantAddress, "streetAddress" | "city" | "state" | "zip">,
+) {
+  return (
     normalizeStreetAddressForMatch(property.streetAddress) ===
       normalizeStreetAddressForMatch(input.streetAddress) &&
     property.city.trim().toLowerCase() === input.city.trim().toLowerCase() &&
@@ -3028,7 +3068,7 @@ export function isClosePropertyAddressMatch(
   property: Property,
   input: Pick<SavedTenantAddress, "streetAddress" | "city" | "state" | "zip">,
 ) {
-  return baseAddressMatches(property, input);
+  return closeBaseAddressMatches(property, input);
 }
 
 export function findPropertyByExactAddress(input: {
@@ -3100,10 +3140,10 @@ export function createPropertyForLandlord(input: {
     name: input.name?.trim() || undefined,
     streetAddress: input.streetAddress.trim(),
     unitNumber: propertyTypeRequiresUnit(input.propertyType)
-      ? input.unitNumber?.trim().toUpperCase()
+      ? normalizeOptionalUnitValue(input.unitNumber)
       : undefined,
     buildingNumber: propertyTypeRequiresUnit(input.propertyType)
-      ? input.buildingNumber?.trim().toUpperCase()
+      ? normalizeOptionalBuildingValue(input.buildingNumber)
       : undefined,
     city: input.city.trim(),
     state: input.state.trim().toUpperCase(),
@@ -3155,10 +3195,10 @@ export function updatePropertyForLandlord(input: {
   property.name = input.name?.trim() || undefined;
   property.streetAddress = input.streetAddress.trim();
   property.unitNumber = propertyTypeRequiresUnit(input.propertyType)
-    ? input.unitNumber?.trim().toUpperCase()
+    ? normalizeOptionalUnitValue(input.unitNumber)
     : undefined;
   property.buildingNumber = propertyTypeRequiresUnit(input.propertyType)
-    ? input.buildingNumber?.trim().toUpperCase()
+    ? normalizeOptionalBuildingValue(input.buildingNumber)
     : undefined;
   property.city = input.city.trim();
   property.state = input.state.trim().toUpperCase();

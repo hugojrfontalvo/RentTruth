@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test:address-flow": "node --test tests/address-mismatch-flow.test.cjs",
     "start": "next start",
     "lint": "next lint"
   },
