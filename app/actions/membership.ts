@@ -162,6 +162,17 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
   });
 
   if (intent === "save-address") {
+    console.log("tenant address save started", {
+      tenantUserId: session.id,
+      streetAddress,
+      city,
+      state,
+      zip,
+      propertyType: normalizedSavedPropertyType,
+      hasUnit: Boolean(unitNumber),
+      hasBuilding: Boolean(buildingNumber),
+    });
+
     if (!streetAddress || !city || !state || !zip) {
       redirect("/dashboard/tenant?joinError=address-required");
     }
@@ -186,6 +197,14 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
         : undefined,
     });
     await flushPersistentStore();
+    console.log("tenant address saved successfully", {
+      tenantUserId: session.id,
+      streetAddress,
+      city,
+      state,
+      zip,
+      propertyType: normalizedSavedPropertyType,
+    });
     redirect("/dashboard/tenant?membership=address-saved");
   }
 

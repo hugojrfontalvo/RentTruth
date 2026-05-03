@@ -1829,6 +1829,7 @@ export async function hydratePersistentStore() {
         applyStoreSnapshot(initialStore);
         await writeDatabaseStoreSnapshot(cloneStoreSnapshot(store));
       }
+      await syncDatabaseUsersFromStore();
       const databaseUsers = await migrateDatabaseStoreUsersToUserTableIfNeeded(await readDatabaseUsers());
       applyDatabaseUsers(databaseUsers);
     } catch (error) {
