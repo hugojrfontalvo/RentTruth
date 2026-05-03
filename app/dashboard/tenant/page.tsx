@@ -11,6 +11,7 @@ import {
   tenantSendTicketMessageAction,
 } from "@/app/actions/tenant";
 import { SupportEntryButtons } from "@/components/support-entry-buttons";
+import { TenantAddressMismatchPanel } from "@/components/tenant-address-mismatch-panel";
 import { TenantJoinForm } from "@/components/tenant-join-form";
 import { TenantRepairUploadFields } from "@/components/tenant-repair-upload-fields";
 import { TicketMessageThread } from "@/components/ticket-message-thread";
@@ -303,6 +304,13 @@ export default async function TenantDashboardPage({
     unitNumber: session.unitNumber,
     buildingNumber: session.buildingNumber,
   });
+  console.log(
+    savedAddressRecord ? "tenant saved address loaded" : "tenant saved address missing",
+    {
+      tenantUserId: session.id,
+      hasSavedAddress: Boolean(savedAddressRecord),
+    },
+  );
   const savedAddress = savedAddressRecord ? formatTenantAddress(savedAddressRecord) : "";
   const savedAddressMatch =
     !property && savedAddressRecord ? findPropertyBySavedAddress(savedAddressRecord) : null;
@@ -319,6 +327,15 @@ export default async function TenantDashboardPage({
     suggestedJoinCodeProperty && savedAddressRecord
       ? isClosePropertyAddressMatch(suggestedJoinCodeProperty, savedAddressRecord)
       : false;
+  if (suggestedJoinCodeProperty && savedAddressRecord) {
+    console.log("mismatch data returned to UI", {
+      tenantUserId: session.id,
+      propertyId: suggestedJoinCodeProperty.id,
+      isCloseSuggestedAddress,
+      landlordAddress: getPropertyServiceAddress(suggestedJoinCodeProperty),
+      tenantAddress: formatTenantAddress(savedAddressRecord),
+    });
+  }
   const membershipStatus = session.membershipStatus ?? (property ? "Pending" : null);
   const isApproved = membershipStatus === "Approved";
   const isPending = membershipStatus === "Pending";
@@ -601,52 +618,13 @@ export default async function TenantDashboardPage({
                     verification step when you have it.
                   </p>
                   {suggestedJoinCodeProperty && savedAddressRecord ? (
-                    <div className="mt-5 rounded-[24px] border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-900">
-                      <p className="font-semibold">
-                        This code belongs to a property that is close but does not exactly match your saved address.
-                      </p>
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-[20px] border border-amber-200 bg-white/70 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
-                            Landlord property
-                          </p>
-                          <p className="mt-2 text-slate-800">
-                            {getPropertyServiceAddress(suggestedJoinCodeProperty)}
-                          </p>
-                        </div>
-                        <div className="rounded-[20px] border border-amber-200 bg-white/70 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-800">
-                            Your saved address
-                          </p>
-                          <p className="mt-2 text-slate-800">{formatTenantAddress(savedAddressRecord)}</p>
-                        </div>
-                      </div>
-                      <p className="mt-3">
-                        {isCloseSuggestedAddress
-                          ? "You can use the landlord’s saved address if this is your home."
-                          : "If this is not your address, edit your saved address instead of requesting access."}
-                      </p>
-                      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                        {isCloseSuggestedAddress ? (
-                          <form action={requestTenantPropertyJoinAction}>
-                            <input type="hidden" name="intent" value="use-landlord-address" />
-                            <input type="hidden" name="joinCode" value={params.joinCode ?? ""} />
-                            <button
-                              type="submit"
-                              className="min-h-[48px] w-full rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-slate-800 sm:w-auto"
-                            >
-                              Use landlord’s address
-                            </button>
-                          </form>
-                        ) : null}
-                        <a
-                          href="#edit-address"
-                          className="min-h-[48px] rounded-full border border-amber-300 bg-white px-5 py-3 text-center text-sm font-semibold text-amber-900 transition hover:-translate-y-0.5 hover:border-amber-400"
-                        >
-                          Edit saved address
-                        </a>
-                      </div>
-                    </div>
+                    <TenantAddressMismatchPanel
+                      landlordAddress={getPropertyServiceAddress(suggestedJoinCodeProperty)}
+                      tenantAddress={formatTenantAddress(savedAddressRecord)}
+                      joinCode={params.joinCode ?? ""}
+                      isCloseMatch={Boolean(isCloseSuggestedAddress)}
+                      requestTenantPropertyJoinAction={requestTenantPropertyJoinAction}
+                    />
                   ) : null}
                   <TenantJoinForm
                     initialSavedAddress={savedAddressRecord}

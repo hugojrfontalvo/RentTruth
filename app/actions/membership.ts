@@ -222,6 +222,10 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
   });
 
   if (intent === "use-landlord-address") {
+    console.log("use landlord address clicked", {
+      tenantUserId: session.id,
+      joinCode,
+    });
     const canUseSuggestedAddress = isClosePropertyAddressMatch(propertyFromJoinCode, currentAddress);
 
     if (!canUseSuggestedAddress) {
@@ -265,7 +269,7 @@ export async function requestTenantPropertyJoinAction(formData: FormData) {
       requestedAt: "Today",
     });
     await flushPersistentStore();
-    console.log("pending approval created", {
+    console.log("approval created after address acceptance", {
       tenantUserId: session.id,
       propertyId: propertyFromJoinCode.id,
     });

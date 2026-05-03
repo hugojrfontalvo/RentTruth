@@ -1591,6 +1591,51 @@ async function writeDatabaseUser(user: AppUser) {
   }
 }
 
+async function upsertDatabaseUser(user: AppUser) {
+  const pool = getDatabasePool();
+
+  if (!pool) {
+    return;
+  }
+
+  await ensureDatabaseUsersTable(pool);
+  await pool.query(
+    `
+      INSERT INTO renttruth_users (id, email, password, role, name, data, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, COALESCE($7::timestamptz, now()), now())
+      ON CONFLICT (email)
+      DO UPDATE SET
+        id = EXCLUDED.id,
+        password = EXCLUDED.password,
+        role = EXCLUDED.role,
+        name = EXCLUDED.name,
+        data = EXCLUDED.data,
+        updated_at = now()
+    `,
+    [
+      user.id,
+      normalizeEmail(user.email),
+      user.password,
+      user.role,
+      user.name ?? null,
+      JSON.stringify(user),
+      user.createdAt ?? null,
+    ],
+  );
+}
+
+async function syncDatabaseUsersFromStore() {
+  if (!isDatabasePersistenceEnabled()) {
+    return;
+  }
+
+  const usersToSync = store.users.filter((user) => !isDemoUser(user));
+
+  for (const user of usersToSync) {
+    await upsertDatabaseUser(user);
+  }
+}
+
 async function migrateDatabaseStoreUsersToUserTableIfNeeded(databaseUsers: AppUser[]) {
   if (databaseUsers.length > 0) {
     return databaseUsers;
@@ -1806,6 +1851,7 @@ export async function flushPersistentStore() {
   }
 
   await databaseWriteQueue;
+  await syncDatabaseUsersFromStore();
 }
 
 function recordActivity(input: {

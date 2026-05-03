@@ -50,6 +50,7 @@ require.extensions[".tsx"] = require.extensions[".ts"];
 test("tenant close address mismatch requires tenant confirmation before landlord approval", () => {
   const React = require("react");
   const { renderToStaticMarkup } = require("react-dom/server");
+  const { TenantAddressMismatchPanel } = require("../components/tenant-address-mismatch-panel.tsx");
   const { TenantJoinFieldsClient } = require("../components/tenant-join-fields-client.tsx");
   const {
     createPropertyForLandlord,
@@ -152,6 +153,21 @@ test("tenant close address mismatch requires tenant confirmation before landlord
   console.log("test: landlord suggested address shown");
   assert.equal(getPropertyServiceAddress(propertyFromJoinCode), "9646 SW 151st Ave, Apt 303 Building 4, Miami, FL 33196");
   assert.equal(formatTenantAddress(savedAddress), "9646 SW 151st Avenue, Apt 303 Building 4, Miami, FL 33196");
+  const mismatchMarkup = renderToStaticMarkup(
+    React.createElement(TenantAddressMismatchPanel, {
+      landlordAddress: getPropertyServiceAddress(propertyFromJoinCode),
+      tenantAddress: formatTenantAddress(savedAddress),
+      joinCode,
+      isCloseMatch: true,
+      requestTenantPropertyJoinAction: async () => {},
+    }),
+  );
+
+  assert.match(mismatchMarkup, /This code belongs to/);
+  assert.match(mismatchMarkup, /9646 SW 151st Ave, Apt 303 Building 4, Miami, FL 33196/);
+  assert.match(mismatchMarkup, /9646 SW 151st Avenue, Apt 303 Building 4, Miami, FL 33196/);
+  assert.match(mismatchMarkup, /Use landlord’s address/);
+  assert.match(mismatchMarkup, /Edit my address/);
 
   console.log("test: tenant accepted landlord address");
   const landlordAddress = {
