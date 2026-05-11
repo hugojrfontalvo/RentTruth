@@ -606,7 +606,7 @@ export default async function TenantDashboardPage({
                     Messages
                   </p>
                   <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
-                    Latest ticket chat
+                    Repair chat
                   </h2>
                 </div>
                 {unreadMessageCount > 0 ? (
@@ -622,15 +622,6 @@ export default async function TenantDashboardPage({
                 ticketId={primaryMessageTicket.id}
                 currentRole="tenant"
                 ticketTitle={primaryMessageTicket.issueTitle}
-                ticketStatus={primaryMessageTicket.status}
-                ticketCreatedAt={primaryMessageTicket.submittedAt}
-                vendorLabel={
-                  primaryMessageTicket.vendorBusinessName
-                    ? `Vendor assigned: ${primaryMessageTicket.vendorBusinessName}`
-                    : primaryMessageTicket.landlordVendorName
-                      ? `Vendor assigned: ${primaryMessageTicket.landlordVendorName}`
-                      : undefined
-                }
                 sendMessageAction={tenantSendTicketMessageAction}
                 markReadAction={tenantMarkTicketMessagesReadAction}
               />
@@ -990,15 +981,6 @@ export default async function TenantDashboardPage({
                         ticketId={ticket.id}
                         currentRole="tenant"
                         ticketTitle={ticket.issueTitle}
-                        ticketStatus={ticket.status}
-                        ticketCreatedAt={ticket.submittedAt}
-                        vendorLabel={
-                          ticket.vendorBusinessName
-                            ? `Vendor assigned: ${ticket.vendorBusinessName}`
-                            : ticket.landlordVendorName
-                              ? `Vendor assigned: ${ticket.landlordVendorName}`
-                              : undefined
-                        }
                         sendMessageAction={tenantSendTicketMessageAction}
                         markReadAction={tenantMarkTicketMessagesReadAction}
                       />

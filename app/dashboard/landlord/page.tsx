@@ -687,7 +687,7 @@ export default async function LandlordDashboardPage({
                     Messages
                   </p>
                   <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
-                    Ticket chat needing attention
+                    Repair chat
                   </h2>
                 </div>
                 {unreadMessageCount > 0 ? (
@@ -703,9 +703,6 @@ export default async function LandlordDashboardPage({
                 ticketId={primaryActiveTicket.ticket.id}
                 currentRole="landlord"
                 ticketTitle={primaryActiveTicket.ticket.issueTitle}
-                ticketStatus={primaryActiveTicket.ticket.status}
-                ticketCreatedAt={primaryActiveTicket.ticket.submittedAt}
-                vendorLabel={getTicketVendorLabel(primaryActiveTicket.ticket)}
                 sendMessageAction={landlordSendTicketMessageAction}
                 markReadAction={landlordMarkTicketMessagesReadAction}
               />
@@ -1778,9 +1775,6 @@ export default async function LandlordDashboardPage({
                                 ticketId={ticket.id}
                                 currentRole="landlord"
                                 ticketTitle={ticket.issueTitle}
-                                ticketStatus={ticket.status}
-                                ticketCreatedAt={ticket.submittedAt}
-                                vendorLabel={getTicketVendorLabel(ticket)}
                                 sendMessageAction={landlordSendTicketMessageAction}
                                 markReadAction={landlordMarkTicketMessagesReadAction}
                               />

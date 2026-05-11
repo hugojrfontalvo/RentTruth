@@ -180,8 +180,10 @@ test("ticket message form renders as fixed-height no-page-reload chat flow", () 
   assert.match(markup, /h-\[680px\]/);
   assert.match(markup, /overflow-y-auto/);
   assert.match(markup, /sticky bottom-0/);
-  assert.match(markup, /Ticket chat/);
-  assert.match(markup, /Timeline/);
+  assert.match(markup, /Repair chat/);
+  assert.doesNotMatch(markup, /Timeline/);
+  assert.doesNotMatch(markup, /message<!-- -->s/);
+  assert.doesNotMatch(markup, />Open</);
   assert.match(markup, /Send Message/);
   assert.match(markup, /Attach photo or PDF/);
   assert.match(markup, /Write a message about this ticket/);
@@ -193,7 +195,7 @@ test("dashboard source keeps active ticket sections above lower ticket history/t
   const landlordPage = readFileSync(join(projectRoot, "app/dashboard/landlord/page.tsx"), "utf8");
 
   assert.ok(
-    tenantPage.indexOf("Latest ticket chat") < tenantPage.indexOf('id="active-tickets"'),
+    tenantPage.indexOf("Repair chat") < tenantPage.indexOf('id="active-tickets"'),
     "tenant messages should render above active repairs",
   );
   assert.ok(

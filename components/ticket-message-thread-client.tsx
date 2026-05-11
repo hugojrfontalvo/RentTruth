@@ -8,9 +8,6 @@ type TicketMessageThreadClientProps = {
   ticketId: string;
   currentRole: "tenant" | "landlord";
   ticketTitle: string;
-  ticketStatus: string;
-  ticketCreatedAt?: string;
-  vendorLabel?: string;
   initialMessages: TicketMessage[];
   sendMessageAction: (formData: FormData) => Promise<TicketMessage | null>;
   markReadAction: (formData: FormData) => Promise<{ markedCount: number }>;
@@ -51,9 +48,6 @@ export function TicketMessageThreadClient({
   ticketId,
   currentRole,
   ticketTitle,
-  ticketStatus,
-  ticketCreatedAt,
-  vendorLabel,
   initialMessages,
   sendMessageAction,
   markReadAction,
@@ -218,48 +212,21 @@ export function TicketMessageThreadClient({
     <section
       id={`messages-${ticketId}`}
       data-fixed-chat-container="true"
-      className="mt-5 flex h-[680px] max-h-[78vh] scroll-mt-4 flex-col rounded-[24px] border border-slate-200 bg-slate-50 p-4 target:ring-4 target:ring-sky-200"
+      className="mt-5 flex h-[680px] max-h-[78vh] scroll-mt-4 flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-200/60 target:ring-4 target:ring-sky-200"
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-            Ticket chat
-          </p>
-          <h4 className="mt-2 font-display text-xl font-semibold tracking-tight text-ink">
-            {ticketTitle}
-          </h4>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.14em]">
-            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">
-              {ticketStatus}
-            </span>
-            {unreadCount > 0 ? (
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
-                {unreadCount} unread
-              </span>
-            ) : null}
-          </div>
-        </div>
-        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
-          {messages.length} message{messages.length === 1 ? "" : "s"}
-        </span>
-      </div>
-
-      <div className="mt-4 shrink-0 rounded-[20px] border border-sky-100 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
-        <p className="font-semibold text-slate-900">Timeline</p>
-        <div className="mt-2 space-y-1">
-          <p>Ticket created{ticketCreatedAt ? `: ${ticketCreatedAt}` : ""}</p>
-          <p>Tenant submitted request</p>
-          {messages.some((message) => message.senderRole === "landlord") ? (
-            <p>Landlord replied</p>
-          ) : null}
-          {vendorLabel ? <p>{vendorLabel}</p> : null}
-        </div>
+      <div className="shrink-0 border-b border-slate-100 bg-white px-4 py-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-700">
+          Repair chat
+        </p>
+        <h4 className="mt-1 line-clamp-2 font-display text-xl font-semibold tracking-tight text-ink">
+          {ticketTitle}
+        </h4>
       </div>
 
       <div
         ref={messageListRef}
         data-internal-message-scroll="true"
-        className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1"
+        className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain bg-slate-50 px-3 py-4"
       >
         {messages.length > 0 ? (
           messages.map((message) => {
@@ -268,21 +235,13 @@ export function TicketMessageThreadClient({
             return (
               <article
                 key={message.id}
-                className={`max-w-[88%] rounded-[20px] border px-4 py-3 ${
+                className={`max-w-[84%] rounded-[22px] px-4 py-2.5 shadow-sm ${
                   isCurrentUser
-                    ? "ml-auto border-sky-200 bg-white"
-                    : "mr-auto border-slate-200 bg-white/80"
+                    ? "ml-auto rounded-br-md bg-ink text-white"
+                    : "mr-auto rounded-bl-md bg-white text-slate-800"
                 }`}
               >
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {getSenderLabel(message)}
-                  </p>
-                  <p className="text-xs font-medium text-slate-400">
-                    {formatMessageTime(message.createdAt)}
-                  </p>
-                </div>
-                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
+                <p className="whitespace-pre-wrap break-words text-sm leading-6">
                   {message.text}
                 </p>
                 {message.attachment ? (
@@ -290,16 +249,25 @@ export function TicketMessageThreadClient({
                     href={message.attachment.dataUrl ?? "#"}
                     target={message.attachment.dataUrl ? "_blank" : undefined}
                     rel={message.attachment.dataUrl ? "noreferrer" : undefined}
-                    className="mt-3 block rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700"
+                    className={`mt-2 block rounded-2xl px-3 py-2 text-sm font-semibold ${
+                      isCurrentUser
+                        ? "bg-white/10 text-white"
+                        : "border border-slate-200 bg-slate-50 text-slate-700"
+                    }`}
                   >
                     {getAttachmentLabel(message.attachment)}: {message.attachment.fileName}
                   </a>
                 ) : null}
+                <p className={`mt-1 text-[11px] leading-4 ${
+                  isCurrentUser ? "text-white/55" : "text-slate-400"
+                }`}>
+                  {getSenderLabel(message)} · {formatMessageTime(message.createdAt)}
+                </p>
               </article>
             );
           })
         ) : (
-          <div className="rounded-[20px] border border-dashed border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-500">
+          <div className="rounded-[22px] border border-dashed border-slate-300 bg-white px-4 py-3 text-sm leading-6 text-slate-500">
             No messages yet. Use this thread for ticket-specific access, scheduling, and repair follow-up.
           </div>
         )}
@@ -309,7 +277,7 @@ export function TicketMessageThreadClient({
         ref={formRef}
         onSubmit={handleSubmit}
         data-no-page-reload="true"
-        className="sticky bottom-0 mt-4 shrink-0 space-y-3 border-t border-slate-200 bg-slate-50 pt-3"
+        className="sticky bottom-0 shrink-0 space-y-3 border-t border-slate-200 bg-white p-3"
       >
         <textarea
           name="message"
@@ -318,7 +286,7 @@ export function TicketMessageThreadClient({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Write a message about this ticket"
-          className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100"
+          className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
         />
         <label className="flex min-h-[48px] cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50">
           {selectedFile ? `Attached: ${selectedFile.name || "Photo"}` : "Attach photo or PDF"}
