@@ -193,10 +193,17 @@ test("dashboard source keeps active ticket sections above lower ticket history/t
   const landlordPage = readFileSync(join(projectRoot, "app/dashboard/landlord/page.tsx"), "utf8");
 
   assert.ok(
+    tenantPage.indexOf("Latest ticket chat") < tenantPage.indexOf('id="active-tickets"'),
+    "tenant messages should render above active repairs",
+  );
+  assert.ok(
     tenantPage.indexOf('id="active-tickets"') < tenantPage.indexOf('id="maintenance-request"'),
-    "tenant active tickets should render before lower tenant tools",
+    "tenant active repairs should render before lower tenant tools",
   );
   assert.ok(tenantPage.includes("href={`#messages-${primaryMessageTicket.id}`}"));
+  assert.ok(tenantPage.includes('href="#active-tickets"'));
+  assert.ok(tenantPage.includes('`${getPropertyDisplayName(property)} • ${residenceLabel}`'));
+  assert.ok(!tenantPage.includes('{residenceLabel}\\n                    </span>'));
   assert.ok(
     landlordPage.indexOf("Active ticket needs attention") <
       landlordPage.indexOf("Create your first property"),

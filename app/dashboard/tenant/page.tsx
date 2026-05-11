@@ -410,6 +410,16 @@ export default async function TenantDashboardPage({
         ? `Unit ${session.unitNumber}`
         : "Unit not set"
       : "Single residence";
+  const propertyContextLabel = property
+    ? `${getPropertyDisplayName(property)} • ${residenceLabel}`
+    : savedAddress
+      ? "Saved address"
+      : "No property linked yet";
+  const propertyContextHref = primaryMessageTicket
+    ? `#messages-${primaryMessageTicket.id}`
+    : property
+      ? "#ticket-history"
+      : "#maintenance-request";
 
   return (
     <main className="min-h-screen bg-[#f7fbff] text-slate-900">
@@ -466,44 +476,57 @@ export default async function TenantDashboardPage({
                 </p>
                 <SupportEntryButtons className="mt-6" />
                 <div className="mt-6 flex flex-wrap gap-3 text-sm">
-                  <span className="rounded-full bg-sky-400/15 px-4 py-2 text-sky-100">
+                  <a
+                    href="#active-tickets"
+                    className="rounded-full bg-sky-400/15 px-4 py-2 text-sky-100 transition hover:bg-sky-400/25"
+                  >
                     You have {openTickets} open ticket{openTickets === 1 ? "" : "s"}
-                  </span>
+                  </a>
                   {unreadMessageCount > 0 ? (
                     <a
                       href={primaryMessageTicket ? `#messages-${primaryMessageTicket.id}` : "#ticket-history"}
-                      className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100"
+                      className="rounded-full bg-amber-300/15 px-4 py-2 text-amber-100 transition hover:bg-amber-300/25"
                     >
                       You have {unreadMessageCount} unread message{unreadMessageCount === 1 ? "" : "s"}
                     </a>
                   ) : null}
-                  <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
-                    {property ? getPropertyDisplayName(property) : "No property linked yet"}
-                  </span>
+                  <a
+                    href={propertyContextHref}
+                    className="rounded-full bg-white/10 px-4 py-2 text-white/80 transition hover:bg-white/15"
+                  >
+                    {propertyContextLabel}
+                  </a>
                   {membershipStatus ? (
-                    <span className={`rounded-full border px-4 py-2 ${getStatusTone(membershipStatus)}`}>
+                    <a
+                      href={property ? "#ticket-history" : "#maintenance-request"}
+                      className={`rounded-full border px-4 py-2 transition hover:bg-white/15 ${getStatusTone(membershipStatus)}`}
+                    >
                       {membershipStatus}
-                    </span>
+                    </a>
                   ) : savedAddress ? (
-                    <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
+                    <a
+                      href="#maintenance-request"
+                      className="rounded-full bg-white/10 px-4 py-2 text-white/80 transition hover:bg-white/15"
+                    >
                       Address saved
-                    </span>
+                    </a>
                   ) : (
-                    <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
+                    <a
+                      href="#maintenance-request"
+                      className="rounded-full bg-white/10 px-4 py-2 text-white/80 transition hover:bg-white/15"
+                    >
                       Ready to join
-                    </span>
+                    </a>
                   )}
                   {savedAddress && !property ? (
-                    <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
+                    <a
+                      href="#maintenance-request"
+                      className="rounded-full bg-white/10 px-4 py-2 text-white/80 transition hover:bg-white/15"
+                    >
                       {savedAddressMatch
                         ? "Waiting for join code verification"
                         : "Waiting for landlord property match"}
-                    </span>
-                  ) : null}
-                  {property ? (
-                    <span className="rounded-full bg-white/10 px-4 py-2 text-white/80">
-                      {residenceLabel}
-                    </span>
+                    </a>
                   ) : null}
                 </div>
               </div>
@@ -575,6 +598,45 @@ export default async function TenantDashboardPage({
             </div>
           ) : null}
 
+          {primaryMessageTicket ? (
+            <section className="mt-6 rounded-[26px] border border-sky-200 bg-white/95 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[32px] sm:p-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">
+                    Messages
+                  </p>
+                  <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
+                    Latest ticket chat
+                  </h2>
+                </div>
+                {unreadMessageCount > 0 ? (
+                  <a
+                    href={`#messages-${primaryMessageTicket.id}`}
+                    className="min-h-[44px] rounded-full border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm font-semibold text-amber-800"
+                  >
+                    Jump to {unreadMessageCount} unread
+                  </a>
+                ) : null}
+              </div>
+              <TicketMessageThread
+                ticketId={primaryMessageTicket.id}
+                currentRole="tenant"
+                ticketTitle={primaryMessageTicket.issueTitle}
+                ticketStatus={primaryMessageTicket.status}
+                ticketCreatedAt={primaryMessageTicket.submittedAt}
+                vendorLabel={
+                  primaryMessageTicket.vendorBusinessName
+                    ? `Vendor assigned: ${primaryMessageTicket.vendorBusinessName}`
+                    : primaryMessageTicket.landlordVendorName
+                      ? `Vendor assigned: ${primaryMessageTicket.landlordVendorName}`
+                      : undefined
+                }
+                sendMessageAction={tenantSendTicketMessageAction}
+                markReadAction={tenantMarkTicketMessagesReadAction}
+              />
+            </section>
+          ) : null}
+
           {tenantConfirmationTickets.length > 0 ? (
             <section id="tenant-confirmation" className="mt-6 scroll-mt-4 target:ring-4 target:ring-amber-200">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -621,45 +683,6 @@ export default async function TenantDashboardPage({
                   <ActiveTicketSummary key={`priority-${ticket.id}`} ticket={ticket} />
                 ))}
               </div>
-            </section>
-          ) : null}
-
-          {primaryMessageTicket ? (
-            <section className="mt-6 rounded-[26px] border border-sky-200 bg-white/95 p-4 shadow-lg shadow-slate-200/70 sm:rounded-[32px] sm:p-6">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">
-                    Messages
-                  </p>
-                  <h2 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
-                    Latest ticket chat
-                  </h2>
-                </div>
-                {unreadMessageCount > 0 ? (
-                  <a
-                    href={`#messages-${primaryMessageTicket.id}`}
-                    className="min-h-[44px] rounded-full border border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm font-semibold text-amber-800"
-                  >
-                    Jump to {unreadMessageCount} unread
-                  </a>
-                ) : null}
-              </div>
-              <TicketMessageThread
-                ticketId={primaryMessageTicket.id}
-                currentRole="tenant"
-                ticketTitle={primaryMessageTicket.issueTitle}
-                ticketStatus={primaryMessageTicket.status}
-                ticketCreatedAt={primaryMessageTicket.submittedAt}
-                vendorLabel={
-                  primaryMessageTicket.vendorBusinessName
-                    ? `Vendor assigned: ${primaryMessageTicket.vendorBusinessName}`
-                    : primaryMessageTicket.landlordVendorName
-                      ? `Vendor assigned: ${primaryMessageTicket.landlordVendorName}`
-                      : undefined
-                }
-                sendMessageAction={tenantSendTicketMessageAction}
-                markReadAction={tenantMarkTicketMessagesReadAction}
-              />
             </section>
           ) : null}
 
