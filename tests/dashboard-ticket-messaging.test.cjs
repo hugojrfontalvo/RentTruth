@@ -148,7 +148,7 @@ test("tenant and landlord active ticket queues and unread counts update with mes
   assert.equal(unreadCount(getTicketsForProperty(property.id)[0], "landlord"), 0);
 });
 
-test("ticket message form renders as no-page-reload client flow", () => {
+test("ticket message form renders as fixed-height no-page-reload chat flow", () => {
   const React = require("react");
   const { renderToStaticMarkup } = require("react-dom/server");
   const { TicketMessageThreadClient } = require("../components/ticket-message-thread-client.tsx");
@@ -160,18 +160,32 @@ test("ticket message form renders as no-page-reload client flow", () => {
       ticketTitle: "AC not cooling",
       ticketStatus: "Open",
       ticketCreatedAt: "Today",
-      initialMessages: [],
+      initialMessages: Array.from({ length: 12 }, (_, index) => ({
+        id: `message-${index}`,
+        ticketId: "ticket-test",
+        senderUserId: index % 2 === 0 ? "tenant-test" : "landlord-test",
+        senderRole: index % 2 === 0 ? "tenant" : "landlord",
+        text: `Message ${index + 1}`,
+        createdAt: new Date(2026, 0, index + 1, 12).toISOString(),
+        readByRoles: index % 2 === 0 ? ["tenant"] : [],
+      })),
       sendMessageAction: async () => null,
       markReadAction: async () => ({ markedCount: 0 }),
     }),
   );
 
   assert.match(markup, /data-no-page-reload="true"/);
+  assert.match(markup, /data-fixed-chat-container="true"/);
+  assert.match(markup, /data-internal-message-scroll="true"/);
+  assert.match(markup, /h-\[680px\]/);
+  assert.match(markup, /overflow-y-auto/);
+  assert.match(markup, /sticky bottom-0/);
   assert.match(markup, /Ticket chat/);
   assert.match(markup, /Timeline/);
   assert.match(markup, /Send Message/);
   assert.match(markup, /Attach photo or PDF/);
   assert.match(markup, /Write a message about this ticket/);
+  assert.match(markup, /Message 12/);
 });
 
 test("dashboard source keeps active ticket sections above lower ticket history/tools", () => {

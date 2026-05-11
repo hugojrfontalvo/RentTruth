@@ -72,6 +72,20 @@ export function TicketMessageThreadClient({
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const messageList = messageListRef.current;
+
+    if (!messageList) {
+      return;
+    }
+
+    messageList.scrollTo({
+      top: messageList.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages.length]);
 
   useEffect(() => {
     if (unreadCount === 0) {
@@ -201,7 +215,11 @@ export function TicketMessageThreadClient({
   }
 
   return (
-    <section id={`messages-${ticketId}`} className="mt-5 scroll-mt-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4 target:ring-4 target:ring-sky-200">
+    <section
+      id={`messages-${ticketId}`}
+      data-fixed-chat-container="true"
+      className="mt-5 flex h-[680px] max-h-[78vh] scroll-mt-4 flex-col rounded-[24px] border border-slate-200 bg-slate-50 p-4 target:ring-4 target:ring-sky-200"
+    >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -226,7 +244,7 @@ export function TicketMessageThreadClient({
         </span>
       </div>
 
-      <div className="mt-4 rounded-[20px] border border-sky-100 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+      <div className="mt-4 shrink-0 rounded-[20px] border border-sky-100 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
         <p className="font-semibold text-slate-900">Timeline</p>
         <div className="mt-2 space-y-1">
           <p>Ticket created{ticketCreatedAt ? `: ${ticketCreatedAt}` : ""}</p>
@@ -238,7 +256,11 @@ export function TicketMessageThreadClient({
         </div>
       </div>
 
-      <div className="mt-4 space-y-3">
+      <div
+        ref={messageListRef}
+        data-internal-message-scroll="true"
+        className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1"
+      >
         {messages.length > 0 ? (
           messages.map((message) => {
             const isCurrentUser = message.senderRole === currentRole;
@@ -246,10 +268,10 @@ export function TicketMessageThreadClient({
             return (
               <article
                 key={message.id}
-                className={`rounded-[20px] border px-4 py-3 ${
+                className={`max-w-[88%] rounded-[20px] border px-4 py-3 ${
                   isCurrentUser
-                    ? "border-sky-200 bg-white"
-                    : "border-slate-200 bg-white/80"
+                    ? "ml-auto border-sky-200 bg-white"
+                    : "mr-auto border-slate-200 bg-white/80"
                 }`}
               >
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
@@ -287,7 +309,7 @@ export function TicketMessageThreadClient({
         ref={formRef}
         onSubmit={handleSubmit}
         data-no-page-reload="true"
-        className="mt-4 space-y-3"
+        className="sticky bottom-0 mt-4 shrink-0 space-y-3 border-t border-slate-200 bg-slate-50 pt-3"
       >
         <textarea
           name="message"
