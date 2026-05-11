@@ -219,8 +219,11 @@ export function TicketMessageThreadClient({
           Repair chat
         </p>
         <h4 className="mt-1 line-clamp-2 font-display text-xl font-semibold tracking-tight text-ink">
-          {ticketTitle}
+          Chat with your landlord
         </h4>
+        <p className="mt-1 line-clamp-1 text-xs font-medium text-slate-400">
+          Linked to active repair: {ticketTitle}
+        </p>
       </div>
 
       <div
@@ -285,7 +288,7 @@ export function TicketMessageThreadClient({
           required
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Write a message about this ticket"
+          placeholder="Message your landlord"
           className="w-full rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
         />
         <label className="flex min-h-[48px] cursor-pointer items-center justify-center rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50">

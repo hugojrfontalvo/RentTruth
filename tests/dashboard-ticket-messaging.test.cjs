@@ -158,8 +158,6 @@ test("ticket message form renders as fixed-height no-page-reload chat flow", () 
       ticketId: "ticket-test",
       currentRole: "tenant",
       ticketTitle: "AC not cooling",
-      ticketStatus: "Open",
-      ticketCreatedAt: "Today",
       initialMessages: Array.from({ length: 12 }, (_, index) => ({
         id: `message-${index}`,
         ticketId: "ticket-test",
@@ -181,12 +179,15 @@ test("ticket message form renders as fixed-height no-page-reload chat flow", () 
   assert.match(markup, /overflow-y-auto/);
   assert.match(markup, /sticky bottom-0/);
   assert.match(markup, /Repair chat/);
+  assert.match(markup, /Chat with your landlord/);
+  assert.match(markup, /Linked to active repair/);
   assert.doesNotMatch(markup, /Timeline/);
   assert.doesNotMatch(markup, /message<!-- -->s/);
   assert.doesNotMatch(markup, />Open</);
+  assert.doesNotMatch(markup, /<h4[^>]*>AC not cooling<\/h4>/);
   assert.match(markup, /Send Message/);
   assert.match(markup, /Attach photo or PDF/);
-  assert.match(markup, /Write a message about this ticket/);
+  assert.match(markup, /Message your landlord/);
   assert.match(markup, /Message 12/);
 });
 
